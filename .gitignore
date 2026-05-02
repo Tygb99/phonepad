@@ -1,0 +1,31 @@
+# Local planning sources
+prd-*.md
+KakaoTalk_Chat_*.csv
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+
+# Android / Gradle
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab
+local.properties
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Logs and local env
+*.log
+.env
+.env.*
+!.env.example
