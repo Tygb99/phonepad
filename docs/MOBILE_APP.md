@@ -30,6 +30,16 @@ Current debug APK path:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Device Test Order
+
+1. Tap `권한` and allow Nearby devices.
+2. Tap `HID 등록`.
+3. Tap `검색 허용`.
+4. Pair `PhonePad` from the host PC Bluetooth settings.
+5. Tap `목록 새로고침`.
+6. Select the paired host and tap `선택 호스트 연결`.
+7. Use the right-side touchpad mode.
+
 Local build command:
 
 ```bash

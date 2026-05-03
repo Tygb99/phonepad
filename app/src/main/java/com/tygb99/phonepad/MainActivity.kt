@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -18,11 +19,11 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import android.view.WindowInsets
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -37,9 +38,17 @@ class MainActivity : Activity() {
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var statusText: TextView
     private lateinit var deviceText: TextView
+    private lateinit var hostText: TextView
+    private lateinit var reportText: TextView
+    private lateinit var trackpadHintText: TextView
     private lateinit var dragButton: Button
     private lateinit var registerButton: Button
     private lateinit var unregisterButton: Button
+    private lateinit var discoverableButton: Button
+    private lateinit var previousHostButton: Button
+    private lateinit var nextHostButton: Button
+    private lateinit var connectButton: Button
+    private lateinit var disconnectButton: Button
     private lateinit var trackpadSurface: FrameLayout
 
     private var hidDevice: BluetoothHidDevice? = null
@@ -51,6 +60,12 @@ class MainActivity : Activity() {
     private var lastY = 0f
     private var gestureDistance = 0f
     private var usingScrollGesture = false
+    private var bondedHosts: List<BluetoothDevice> = emptyList()
+    private var selectedHostIndex = 0
+    private var connectionState = BluetoothProfile.STATE_DISCONNECTED
+    private var sentReportCount = 0
+    private var failedReportCount = 0
+    private var lastReportSummary = "아직 전송 없음"
 
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
 
@@ -61,7 +76,8 @@ class MainActivity : Activity() {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hidDevice = proxy as BluetoothHidDevice
-            setStatus("HID 프로필을 열었습니다. 이제 HID 등록을 시도할 수 있습니다.")
+            refreshBondedHosts(showStatus = false)
+            setStatus("HID 프로필을 열었습니다. HID 등록 또는 페어링된 호스트 연결을 진행하세요.")
             if (pendingRegister) {
                 pendingRegister = false
                 registerHidApp()
@@ -76,6 +92,7 @@ class MainActivity : Activity() {
             activeHost = null
             appRegistered = false
             dragMode = false
+            connectionState = BluetoothProfile.STATE_DISCONNECTED
             setStatus("HID 프로필 연결이 끊어졌습니다.")
             refreshControls()
         }
@@ -84,18 +101,21 @@ class MainActivity : Activity() {
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             appRegistered = registered
+            refreshBondedHosts(showStatus = false)
             if (registered) {
-                activeHost = pluggedDevice ?: activeHost ?: firstConnectedHost()
-                setStatus("HID 앱이 등록됐습니다. PC/macOS Bluetooth 설정에서 PhonePad를 페어링하세요.")
+                activeHost = pluggedDevice ?: connectedHost()
+                setStatus("HID 앱이 등록됐습니다. 왼쪽 연결 영역에서 PC를 연결한 뒤 터치패드를 사용하세요.")
             } else {
                 activeHost = null
                 dragMode = false
+                connectionState = BluetoothProfile.STATE_DISCONNECTED
                 setStatus("HID 앱 등록이 해제됐습니다.")
             }
             refreshControls()
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice?, state: Int) {
+            connectionState = state
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     activeHost = device
@@ -120,31 +140,37 @@ class MainActivity : Activity() {
             releaseAllMouseButtons("virtual_cable_unplug")
             if (activeHost?.address == device?.address) activeHost = null
             dragMode = false
+            connectionState = BluetoothProfile.STATE_DISCONNECTED
             setStatus("가상 케이블 연결이 해제됐습니다.")
             refreshControls()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         setContentView(buildContentView())
         updateDeviceText()
+        refreshBondedHosts(showStatus = false)
         refreshCompatibility()
         refreshControls()
     }
 
     override fun onStop() {
-        releaseAllMouseButtons("activity_stopped")
-        dragMode = false
-        refreshControls()
+        if (dragMode) {
+            releaseAllMouseButtons("activity_stopped")
+            dragMode = false
+            refreshControls()
+        }
         super.onStop()
     }
 
+    @SuppressLint("MissingPermission")
     override fun onDestroy() {
         releaseAllMouseButtons("activity_destroyed")
-        unregisterHidApp()
+        if (hasNearbyDevicePermissions()) hidDevice?.unregisterApp()
         hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
         hidDevice = null
         super.onDestroy()
@@ -160,128 +186,207 @@ class MainActivity : Activity() {
         val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
         if (granted) {
             setStatus("Nearby devices 권한이 허용됐습니다.")
+            refreshBondedHosts(showStatus = false)
             if (pendingRegister) openHidProfile()
         } else {
             pendingRegister = false
-            setStatus("Nearby devices 권한이 필요합니다. 권한 없이는 HID 등록을 진행할 수 없습니다.")
+            setStatus("Nearby devices 권한이 필요합니다. 권한 없이는 HID 등록과 호스트 연결을 진행할 수 없습니다.")
         }
         refreshControls()
     }
 
     private fun buildContentView(): View {
         val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(COLOR_BACKGROUND)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         root.setOnApplyWindowInsetsListener { view, insets ->
             @Suppress("DEPRECATION")
             view.setPadding(
-                dp(18),
-                insets.systemWindowInsetTop + dp(12),
-                dp(18),
-                insets.systemWindowInsetBottom + dp(12),
+                insets.systemWindowInsetLeft + dp(16),
+                insets.systemWindowInsetTop + dp(10),
+                insets.systemWindowInsetRight + dp(16),
+                insets.systemWindowInsetBottom + dp(10),
             )
             insets
         }
 
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(root)
+        val connectionPanel = buildConnectionPanel()
+        root.addView(
+            connectionPanel,
+            LinearLayout.LayoutParams(dp(370), ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                rightMargin = dp(14)
+            },
+        )
+
+        val touchpadPanel = buildTouchpadPanel()
+        root.addView(
+            touchpadPanel,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f),
+        )
+
+        return root
+    }
+
+    private fun buildConnectionPanel(): View {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
 
         val title = TextView(this).apply {
             text = getString(R.string.app_name)
-            textSize = 28f
+            textSize = 24f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         }
-        root.addView(title, matchWrap())
+        column.addView(title, matchWrap())
 
         deviceText = TextView(this).apply {
-            textSize = 14f
+            textSize = 13f
             setTextColor(COLOR_MUTED)
-            setPadding(0, dp(4), 0, dp(10))
+            setPadding(0, dp(2), 0, dp(12))
         }
-        root.addView(deviceText, matchWrap())
+        column.addView(deviceText, matchWrap())
 
-        statusText = TextView(this).apply {
-            textSize = 15f
-            setTextColor(Color.WHITE)
-            setLineSpacing(2f, 1.05f)
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = rounded(COLOR_PANEL, dp(8), COLOR_STROKE)
-        }
-        root.addView(statusText, matchWrap(bottom = 14))
+        column.addView(sectionLabel("연결 영역"), matchWrap(bottom = 8))
 
-        val setupRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        setupRow.addView(actionButton("권한", ::requestNearbyDevicePermissions), rowButtonParams())
-        setupRow.addView(actionButton("Bluetooth 설정", ::openBluetoothSettings), rowButtonParams())
-        root.addView(setupRow, matchWrap(bottom = 8))
+        statusText = infoBox()
+        column.addView(statusText, matchWrap(bottom = 10))
 
-        val hidRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        column.addView(sectionLabel("순서 가이드"), matchWrap(bottom = 6))
+        column.addView(
+            infoBox().apply { text = setupGuideText() },
+            matchWrap(bottom = 10),
+        )
+
+        column.addView(
+            buttonRow(
+                actionButton("권한", ::requestNearbyDevicePermissions),
+                actionButton("Bluetooth 설정", ::openBluetoothSettings),
+            ),
+            matchWrap(bottom = 8),
+        )
+
+        discoverableButton = actionButton("검색 허용") { requestDiscoverable() }
+        column.addView(discoverableButton, matchWrap(bottom = 8))
+
         registerButton = actionButton("HID 등록", ::prepareHidRegistration)
-        unregisterButton = actionButton("해제", ::unregisterHidApp)
-        hidRow.addView(registerButton, rowButtonParams())
-        hidRow.addView(unregisterButton, rowButtonParams())
-        root.addView(hidRow, matchWrap(bottom = 14))
+        unregisterButton = actionButton("HID 해제", ::unregisterHidApp)
+        column.addView(buttonRow(registerButton, unregisterButton), matchWrap(bottom = 12))
+
+        hostText = infoBox()
+        column.addView(hostText, matchWrap(bottom = 8))
+
+        previousHostButton = actionButton("이전", ::selectPreviousHost)
+        nextHostButton = actionButton("다음", ::selectNextHost)
+        column.addView(buttonRow(previousHostButton, nextHostButton), matchWrap(bottom = 8))
+
+        column.addView(
+            buttonRow(
+                actionButton("목록 새로고침") { refreshBondedHosts(showStatus = true) },
+                actionButton("페어링 설정", ::openBluetoothSettings),
+            ),
+            matchWrap(bottom = 8),
+        )
+
+        connectButton = actionButton("선택 호스트 연결", ::connectSelectedHost)
+        disconnectButton = actionButton("연결 해제", ::disconnectActiveHost)
+        column.addView(buttonRow(connectButton, disconnectButton), matchWrap(bottom = 12))
+
+        reportText = infoBox()
+        column.addView(reportText, matchWrap())
+
+        return ScrollView(this).apply {
+            background = rounded(COLOR_PANEL, dp(8), COLOR_STROKE)
+            isFillViewport = true
+            addView(column)
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun buildTouchpadPanel(): View {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = rounded(COLOR_PANEL_ALT, dp(8), COLOR_STROKE)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(
+            TextView(this).apply {
+                text = "터치패드 모드"
+                textSize = 22f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        header.addView(
+            TextView(this).apply {
+                text = "한 손가락 이동 · 두 손가락 스크롤 · 탭 클릭"
+                textSize = 13f
+                setTextColor(COLOR_MUTED)
+                gravity = Gravity.END
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        panel.addView(header, matchWrap(bottom = 10))
 
         trackpadSurface = FrameLayout(this).apply {
+            isClickable = true
+            isFocusable = true
             background = rounded(COLOR_TRACKPAD, dp(8), COLOR_TRACKPAD_STROKE)
             setOnTouchListener(::handleTrackpadTouch)
-            addView(
-                TextView(context).apply {
-                    text = "터치패드"
-                    textSize = 18f
-                    setTextColor(COLOR_TRACKPAD_LABEL)
-                    gravity = Gravity.CENTER
-                },
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
         }
-        root.addView(trackpadSurface, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0,
-            1f,
-        ).apply { bottomMargin = dp(14) })
-
-        val clickRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        trackpadHintText = TextView(this).apply {
+            text = "왼쪽 연결 영역에서 HID 등록과 호스트 연결을 완료하세요"
+            textSize = 17f
+            setTextColor(COLOR_TRACKPAD_LABEL)
             gravity = Gravity.CENTER
+            setPadding(dp(18), 0, dp(18), 0)
         }
-        clickRow.addView(actionButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) }, rowButtonParams())
-        clickRow.addView(actionButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) }, rowButtonParams())
-        root.addView(clickRow, matchWrap(bottom = 8))
+        trackpadSurface.addView(
+            trackpadHintText,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        panel.addView(
+            trackpadSurface,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                bottomMargin = dp(12)
+            },
+        )
 
-        val motionRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        motionRow.addView(actionButton("스크롤 ↑") { sendMouseReport(0, 0, currentButtons(), 4, 0) }, rowButtonParams())
-        motionRow.addView(actionButton("스크롤 ↓") { sendMouseReport(0, 0, currentButtons(), -4, 0) }, rowButtonParams())
-        motionRow.addView(actionButton("테스트 이동") { sendMouseReport(30, 0, currentButtons(), 0, 0) }, rowButtonParams())
-        root.addView(motionRow, matchWrap(bottom = 8))
+        panel.addView(
+            buttonRow(
+                actionButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
+                actionButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
+                actionButton("스크롤 ↑") { sendMouseReport(0, 0, currentButtons(), 5, 0) },
+                actionButton("스크롤 ↓") { sendMouseReport(0, 0, currentButtons(), -5, 0) },
+                actionButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
+            ),
+            matchWrap(bottom = 10),
+        )
 
         dragButton = actionButton("Drag", ::toggleDragMode).apply {
-            minHeight = dp(52)
+            minHeight = dp(54)
         }
-        root.addView(dragButton, matchWrap())
+        panel.addView(dragButton, matchWrap())
 
-        return scroll
+        return panel
     }
 
     private fun updateDeviceText() {
         deviceText.text = String.format(
             Locale.US,
-            "%s %s · Android %s(API %d) · targetSdk 36",
+            "%s %s · Android %s(API %d) · targetSdk 36 · landscape",
             Build.MANUFACTURER.replaceFirstChar { it.titlecase(Locale.US) },
             Build.MODEL,
             Build.VERSION.RELEASE,
@@ -294,23 +399,41 @@ class MainActivity : Activity() {
         when {
             adapter == null -> setStatus("Bluetooth 어댑터를 찾을 수 없습니다.")
             !adapter.isEnabled -> setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켠 뒤 HID 등록을 진행하세요.")
-            hasNearbyDevicePermissions() -> setStatus("준비됐습니다. HID 등록을 누른 뒤 PC/macOS에서 Bluetooth 기기 추가를 진행하세요.")
+            hasNearbyDevicePermissions() -> setStatus("준비됐습니다. HID 등록 후 PC를 페어링하거나 페어링된 호스트를 연결하세요.")
             else -> setStatus("Nearby devices 권한을 허용하면 HID 등록을 진행할 수 있습니다.")
         }
     }
 
     private fun refreshControls() {
         runOnUiThread {
-            val canUseHid = hasNearbyDevicePermissions() && bluetoothAdapter?.isEnabled == true
-            registerButton.isEnabled = canUseHid && !appRegistered
+            val hasPermissions = hasNearbyDevicePermissions()
+            val adapterEnabled = bluetoothAdapter?.isEnabled == true
+            val host = connectedHost()
+            val canUseBluetooth = hasPermissions && adapterEnabled
+            registerButton.isEnabled = canUseBluetooth && !appRegistered
             unregisterButton.isEnabled = hidDevice != null || appRegistered
-            trackpadSurface.isEnabled = appRegistered
+            discoverableButton.isEnabled = canUseBluetooth
+            previousHostButton.isEnabled = bondedHosts.size > 1
+            nextHostButton.isEnabled = bondedHosts.size > 1
+            connectButton.isEnabled = canUseBluetooth && appRegistered && hidDevice != null && selectedHost() != null
+            disconnectButton.isEnabled = canUseBluetooth && hidDevice != null && host != null
+            trackpadSurface.isEnabled = true
+            dragButton.isEnabled = appRegistered
             dragButton.text = if (dragMode) "Dragging" else "Drag"
             dragButton.background = rounded(
                 if (dragMode) COLOR_DRAG_ACTIVE else COLOR_BUTTON,
                 dp(8),
                 if (dragMode) COLOR_DRAG_STROKE else COLOR_BUTTON_STROKE,
             )
+            hostText.text = buildHostText(host)
+            reportText.text = buildReportText()
+            trackpadHintText.text = when {
+                !appRegistered -> "HID 등록 전입니다"
+                host == null -> "호스트 연결 대기 중"
+                dragMode -> "Dragging · 손가락을 밀면 왼쪽 버튼을 누른 채 이동"
+                else -> "터치패드 활성 · 한 손가락 이동 / 두 손가락 스크롤 / 탭 클릭"
+            }
+            trackpadHintText.setTextColor(if (host == null) COLOR_TRACKPAD_LABEL else COLOR_TRACKPAD_READY)
         }
     }
 
@@ -380,6 +503,7 @@ class MainActivity : Activity() {
         hidDevice?.unregisterApp()
         appRegistered = false
         activeHost = null
+        connectionState = BluetoothProfile.STATE_DISCONNECTED
         setStatus("HID 앱을 해제했습니다.")
         refreshControls()
     }
@@ -387,6 +511,7 @@ class MainActivity : Activity() {
     private fun requestNearbyDevicePermissions() {
         if (hasNearbyDevicePermissions()) {
             setStatus("필요한 Bluetooth 권한이 이미 허용돼 있습니다.")
+            refreshBondedHosts(showStatus = false)
             refreshControls()
             return
         }
@@ -411,11 +536,101 @@ class MainActivity : Activity() {
         startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     }
 
+    @SuppressLint("MissingPermission")
+    private fun requestDiscoverable() {
+        if (!hasNearbyDevicePermissions()) {
+            requestNearbyDevicePermissions()
+            return
+        }
+        if (bluetoothAdapter?.isEnabled != true) {
+            openBluetoothSettings()
+            return
+        }
+        val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
+        }
+        startActivity(intent)
+        setStatus("PC의 Bluetooth 기기 추가 화면에서 PhonePad를 검색하세요.")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun refreshBondedHosts(showStatus: Boolean) {
+        bondedHosts = if (hasNearbyDevicePermissions()) {
+            bluetoothAdapter?.bondedDevices
+                ?.sortedBy { it.safeSortLabel() }
+                ?: emptyList()
+        } else {
+            emptyList()
+        }
+        if (selectedHostIndex !in bondedHosts.indices) selectedHostIndex = 0
+        if (showStatus) setStatus("페어링된 기기 ${bondedHosts.size}개를 불러왔습니다.")
+        refreshControls()
+    }
+
+    private fun selectPreviousHost() {
+        if (bondedHosts.isEmpty()) return
+        selectedHostIndex = (selectedHostIndex - 1 + bondedHosts.size) % bondedHosts.size
+        setStatus("선택 호스트: ${selectedHost().safeLabel()}")
+        refreshControls()
+    }
+
+    private fun selectNextHost() {
+        if (bondedHosts.isEmpty()) return
+        selectedHostIndex = (selectedHostIndex + 1) % bondedHosts.size
+        setStatus("선택 호스트: ${selectedHost().safeLabel()}")
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectSelectedHost() {
+        if (!hasNearbyDevicePermissions()) {
+            requestNearbyDevicePermissions()
+            return
+        }
+        if (!appRegistered || hidDevice == null) {
+            setStatus("먼저 HID 등록을 완료하세요.")
+            return
+        }
+        val host = selectedHost()
+        if (host == null) {
+            refreshBondedHosts(showStatus = false)
+            setStatus("페어링된 호스트가 없습니다. PC Bluetooth 설정에서 PhonePad를 먼저 페어링하세요.")
+            return
+        }
+        val accepted = hidDevice?.connect(host) == true
+        if (accepted) {
+            activeHost = host
+            connectionState = BluetoothProfile.STATE_CONNECTING
+            setStatus("호스트 연결 요청을 보냈습니다: ${host.safeLabel()}")
+        } else {
+            setStatus("호스트 연결 요청이 거절됐습니다. PC Bluetooth 화면에서 PhonePad를 직접 연결해보세요.")
+        }
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnectActiveHost() {
+        if (!hasNearbyDevicePermissions()) return
+        val host = connectedHost() ?: activeHost ?: selectedHost()
+        if (host == null) {
+            setStatus("연결 해제할 호스트가 없습니다.")
+            return
+        }
+        releaseAllMouseButtons("manual_disconnect")
+        val accepted = hidDevice?.disconnect(host) == true
+        activeHost = null
+        dragMode = false
+        connectionState = BluetoothProfile.STATE_DISCONNECTED
+        setStatus(if (accepted) "호스트 연결 해제를 요청했습니다." else "호스트 연결 해제 요청이 거절됐습니다.")
+        refreshControls()
+    }
+
     private fun handleTrackpadTouch(view: View, event: MotionEvent): Boolean {
-        if (!appRegistered) {
-            setStatus("먼저 HID 등록과 호스트 페어링을 완료해주세요.")
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && readyHostForInput(showStatus = true) == null) {
             return true
         }
+        if (readyHostForInput(showStatus = false) == null) return true
+
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastX = event.x
@@ -436,7 +651,7 @@ class MainActivity : Activity() {
                 lastY = event.y
                 gestureDistance += abs(dx) + abs(dy)
                 if (event.pointerCount >= 2 || usingScrollGesture) {
-                    val wheel = (-dy / 12f).roundToInt().coerceIn(-12, 12)
+                    val wheel = (-dy / 11f).roundToInt().coerceIn(-12, 12)
                     if (wheel != 0) sendMouseReport(0, 0, currentButtons(), wheel, 0)
                 } else {
                     val moveX = (dx * POINTER_SCALE).roundToInt().coerceIn(-127, 127)
@@ -463,11 +678,23 @@ class MainActivity : Activity() {
         return true
     }
 
-    private fun toggleDragMode() {
-        if (!appRegistered) {
-            setStatus("Drag Mode 전에 HID 등록과 호스트 페어링이 필요합니다.")
-            return
+    private fun readyHostForInput(showStatus: Boolean): BluetoothDevice? {
+        val host = connectedHost()
+        val message = when {
+            !hasNearbyDevicePermissions() -> "Bluetooth 권한이 필요합니다."
+            !appRegistered -> "HID 등록이 필요합니다."
+            host == null -> "HID는 등록됐지만 호스트 연결이 없습니다. 왼쪽에서 페어링된 PC를 선택해 연결하세요."
+            else -> null
         }
+        if (message != null && showStatus) {
+            setStatus(message)
+            refreshControls()
+        }
+        return host
+    }
+
+    private fun toggleDragMode() {
+        if (readyHostForInput(showStatus = true) == null) return
         if (dragMode) {
             val ok = releaseAllMouseButtons("drag_off")
             dragMode = false
@@ -475,6 +702,7 @@ class MainActivity : Activity() {
         } else {
             val ok = sendMouseReport(0, 0, LEFT_BUTTON, 0, 0)
             dragMode = ok
+            if (ok) trackpadSurface.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             setStatus(if (ok) "Drag Mode를 켰습니다." else "Drag Mode 시작에 실패했습니다. 호스트 연결을 확인하세요.")
         }
         refreshControls()
@@ -485,57 +713,137 @@ class MainActivity : Activity() {
             setStatus("Drag Mode 중에는 클릭 대신 왼쪽 버튼을 유지합니다.")
             return
         }
+        if (readyHostForInput(showStatus = true) == null) return
         val down = sendMouseReport(0, 0, button, 0, 0)
-        val up = releaseAllMouseButtons("click")
-        setStatus(
-            if (down && up) "클릭 보고서를 보냈습니다."
-            else "클릭 보고서 전송에 실패했습니다. 호스트 연결을 확인하세요.",
-        )
+        trackpadSurface.postDelayed({
+            val up = releaseAllMouseButtons("click")
+            if (down && up) {
+                trackpadSurface.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                setStatus("클릭 보고서를 보냈습니다.")
+            } else {
+                setStatus("클릭 보고서 전송에 실패했습니다. 호스트 연결을 확인하세요.")
+            }
+            refreshControls()
+        }, CLICK_RELEASE_DELAY_MS)
     }
 
     private fun currentButtons(): Int = if (dragMode) LEFT_BUTTON else 0
 
     @SuppressLint("MissingPermission")
     private fun sendMouseReport(dx: Int, dy: Int, buttons: Int, wheel: Int, horizontalWheel: Int): Boolean {
-        if (!hasNearbyDevicePermissions()) return false
-        val device = activeHost ?: firstConnectedHost()
+        if (!hasNearbyDevicePermissions()) return recordReport(false, "권한 없음")
+        val device = connectedHost()
         val hid = hidDevice
-        if (hid == null || device == null || !appRegistered) return false
+        if (hid == null || device == null || !appRegistered) return recordReport(false, "호스트 없음")
         val payload = byteArrayOf(
             buttons.coerceIn(0, 7).toByte(),
             dx.coerceIn(-127, 127).toByte(),
             dy.coerceIn(-127, 127).toByte(),
             wheel.coerceIn(-127, 127).toByte(),
-            horizontalWheel.coerceIn(-127, 127).toByte(),
         )
-        return hid.sendReport(device, MOUSE_REPORT_ID, payload)
+        val ok = hid.sendReport(device, MOUSE_REPORT_ID, payload)
+        val summary = if (horizontalWheel != 0) {
+            "dx=$dx dy=$dy wheel=$wheel horizontalIgnored=$horizontalWheel"
+        } else {
+            "dx=$dx dy=$dy wheel=$wheel buttons=$buttons"
+        }
+        return recordReport(ok, summary)
     }
 
     @SuppressLint("MissingPermission")
     private fun releaseAllMouseButtons(reason: String): Boolean {
-        val device = activeHost ?: firstConnectedHost()
+        val device = connectedHost()
         val hid = hidDevice ?: return false
         if (!hasNearbyDevicePermissions() || device == null || !appRegistered) return false
-        val ok = hid.sendReport(device, MOUSE_REPORT_ID, byteArrayOf(0, 0, 0, 0, 0))
+        val ok = hid.sendReport(device, MOUSE_REPORT_ID, byteArrayOf(0, 0, 0, 0))
+        recordReport(ok, "release_all reason=$reason")
         if (!ok && reason != "activity_destroyed") {
             setStatus("버튼 해제 보고서 전송에 실패했습니다: $reason")
         }
         return ok
     }
 
+    private fun recordReport(ok: Boolean, summary: String): Boolean {
+        if (ok) sentReportCount++ else failedReportCount++
+        lastReportSummary = summary
+        if (!ok || sentReportCount % 8 == 0) refreshControls()
+        return ok
+    }
+
     @SuppressLint("MissingPermission")
-    private fun firstConnectedHost(): BluetoothDevice? {
+    private fun connectedHost(): BluetoothDevice? {
         if (!hasNearbyDevicePermissions()) return null
-        return hidDevice?.connectedDevices?.firstOrNull()?.also { activeHost = it }
+        val hid = hidDevice ?: return null
+        val current = activeHost
+        if (current != null && hid.getConnectionState(current) == BluetoothProfile.STATE_CONNECTED) {
+            connectionState = BluetoothProfile.STATE_CONNECTED
+            return current
+        }
+        val connected = hid.connectedDevices.firstOrNull()
+        if (connected != null) {
+            activeHost = connected
+            connectionState = BluetoothProfile.STATE_CONNECTED
+        }
+        return connected
+    }
+
+    private fun selectedHost(): BluetoothDevice? = bondedHosts.getOrNull(selectedHostIndex)
+
+    private fun buildHostText(host: BluetoothDevice?): String {
+        val selected = selectedHost()
+        return buildString {
+            appendLine("활성 호스트: ${host.safeLabel()}")
+            appendLine("연결 상태: ${connectionState.toConnectionLabel()}")
+            appendLine("선택 호스트: ${selected.safeLabel()}")
+            append("페어링 목록: ${bondedHosts.size}개")
+        }
+    }
+
+    private fun buildReportText(): String {
+        return buildString {
+            appendLine("전송 성공: $sentReportCount")
+            appendLine("전송 실패: $failedReportCount")
+            append("마지막: $lastReportSummary")
+        }
+    }
+
+    private fun setupGuideText(): String {
+        return buildString {
+            appendLine("1. 권한 허용")
+            appendLine("2. HID 등록")
+            appendLine("3. 검색 허용")
+            appendLine("4. PC Bluetooth에서 PhonePad 페어링")
+            appendLine("5. 목록 새로고침")
+            appendLine("6. 선택 호스트 연결")
+            append("7. 오른쪽 터치패드 사용")
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun BluetoothDevice?.safeLabel(): String {
-        if (this == null) return "알 수 없음"
+        if (this == null) return "없음"
         return if (hasNearbyDevicePermissions()) {
             name?.takeIf { it.isNotBlank() } ?: address
         } else {
             "권한 필요"
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothDevice.safeSortLabel(): String {
+        return if (hasNearbyDevicePermissions()) {
+            "${name ?: ""} $address"
+        } else {
+            address
+        }
+    }
+
+    private fun Int.toConnectionLabel(): String {
+        return when (this) {
+            BluetoothProfile.STATE_CONNECTED -> "연결됨"
+            BluetoothProfile.STATE_CONNECTING -> "연결 중"
+            BluetoothProfile.STATE_DISCONNECTING -> "연결 해제 중"
+            else -> "연결 안 됨"
         }
     }
 
@@ -545,15 +853,50 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun sectionLabel(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 13f
+            setTextColor(COLOR_ACCENT)
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0f
+        }
+    }
+
+    private fun infoBox(): TextView {
+        return TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            setLineSpacing(2f, 1.05f)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(COLOR_INFO, dp(8), COLOR_STROKE)
+        }
+    }
+
     private fun actionButton(text: String, onClick: () -> Unit): Button {
         return Button(this).apply {
             this.text = text
-            textSize = 14f
+            textSize = 13f
             isAllCaps = false
-            minHeight = dp(46)
+            minHeight = dp(44)
             setTextColor(Color.WHITE)
             background = rounded(COLOR_BUTTON, dp(8), COLOR_BUTTON_STROKE)
             setOnClickListener { onClick() }
+        }
+    }
+
+    private fun buttonRow(vararg buttons: Button): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            buttons.forEachIndexed { index, button ->
+                addView(
+                    button,
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        if (index > 0) leftMargin = dp(6)
+                    },
+                )
+            }
         }
     }
 
@@ -573,13 +916,6 @@ class MainActivity : Activity() {
         ).apply { bottomMargin = dp(bottom) }
     }
 
-    private fun rowButtonParams(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            leftMargin = dp(4)
-            rightMargin = dp(4)
-        }
-    }
-
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     companion object {
@@ -587,18 +923,24 @@ class MainActivity : Activity() {
         private const val MOUSE_REPORT_ID = 1
         private const val LEFT_BUTTON = 1
         private const val RIGHT_BUTTON = 2
-        private const val POINTER_SCALE = 1.3f
+        private const val POINTER_SCALE = 1.55f
+        private const val DISCOVERABLE_SECONDS = 300
+        private const val CLICK_RELEASE_DELAY_MS = 35L
 
-        private val COLOR_BACKGROUND = Color.rgb(12, 14, 18)
-        private val COLOR_PANEL = Color.rgb(30, 34, 42)
-        private val COLOR_STROKE = Color.rgb(63, 71, 86)
-        private val COLOR_TRACKPAD = Color.rgb(20, 24, 31)
-        private val COLOR_TRACKPAD_STROKE = Color.rgb(82, 93, 112)
-        private val COLOR_TRACKPAD_LABEL = Color.rgb(132, 143, 160)
-        private val COLOR_MUTED = Color.rgb(164, 174, 190)
-        private val COLOR_BUTTON = Color.rgb(43, 50, 63)
-        private val COLOR_BUTTON_STROKE = Color.rgb(93, 105, 126)
-        private val COLOR_DRAG_ACTIVE = Color.rgb(164, 53, 65)
+        private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
+        private val COLOR_PANEL = Color.rgb(28, 32, 39)
+        private val COLOR_PANEL_ALT = Color.rgb(23, 27, 34)
+        private val COLOR_INFO = Color.rgb(35, 41, 50)
+        private val COLOR_STROKE = Color.rgb(72, 83, 100)
+        private val COLOR_TRACKPAD = Color.rgb(15, 19, 25)
+        private val COLOR_TRACKPAD_STROKE = Color.rgb(94, 111, 134)
+        private val COLOR_TRACKPAD_LABEL = Color.rgb(136, 149, 169)
+        private val COLOR_TRACKPAD_READY = Color.rgb(223, 232, 244)
+        private val COLOR_MUTED = Color.rgb(166, 177, 194)
+        private val COLOR_ACCENT = Color.rgb(132, 189, 177)
+        private val COLOR_BUTTON = Color.rgb(46, 55, 68)
+        private val COLOR_BUTTON_STROKE = Color.rgb(96, 112, 134)
+        private val COLOR_DRAG_ACTIVE = Color.rgb(169, 57, 68)
         private val COLOR_DRAG_STROKE = Color.rgb(236, 118, 130)
 
         private val MOUSE_DESCRIPTOR = intArrayOf(
@@ -627,13 +969,6 @@ class MainActivity : Activity() {
             0x25, 0x7F,
             0x75, 0x08,
             0x95, 0x03,
-            0x81, 0x06,
-            0x05, 0x0C,
-            0x0A, 0x38, 0x02,
-            0x15, 0x81,
-            0x25, 0x7F,
-            0x75, 0x08,
-            0x95, 0x01,
             0x81, 0x06,
             0xC0,
             0xC0,
