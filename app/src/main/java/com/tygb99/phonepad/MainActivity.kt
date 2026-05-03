@@ -18,6 +18,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -740,13 +741,11 @@ class MainActivity : Activity() {
             dx.coerceIn(-127, 127).toByte(),
             dy.coerceIn(-127, 127).toByte(),
             wheel.coerceIn(-127, 127).toByte(),
+            horizontalWheel.coerceIn(-127, 127).toByte(),
         )
         val ok = hid.sendReport(device, MOUSE_REPORT_ID, payload)
-        val summary = if (horizontalWheel != 0) {
-            "dx=$dx dy=$dy wheel=$wheel horizontalIgnored=$horizontalWheel"
-        } else {
-            "dx=$dx dy=$dy wheel=$wheel buttons=$buttons"
-        }
+        val summary = "dx=$dx dy=$dy wheel=$wheel hWheel=$horizontalWheel buttons=$buttons"
+        Log.d(LOG_TAG, "send mouse report ok=$ok host=${device.address} $summary")
         return recordReport(ok, summary)
     }
 
@@ -755,7 +754,8 @@ class MainActivity : Activity() {
         val device = connectedHost()
         val hid = hidDevice ?: return false
         if (!hasNearbyDevicePermissions() || device == null || !appRegistered) return false
-        val ok = hid.sendReport(device, MOUSE_REPORT_ID, byteArrayOf(0, 0, 0, 0))
+        val ok = hid.sendReport(device, MOUSE_REPORT_ID, byteArrayOf(0, 0, 0, 0, 0))
+        Log.d(LOG_TAG, "release mouse buttons ok=$ok host=${device.address} reason=$reason")
         recordReport(ok, "release_all reason=$reason")
         if (!ok && reason != "activity_destroyed") {
             setStatus("버튼 해제 보고서 전송에 실패했습니다: $reason")
@@ -812,7 +812,7 @@ class MainActivity : Activity() {
             appendLine("1. 권한 허용")
             appendLine("2. HID 등록")
             appendLine("3. 검색 허용")
-            appendLine("4. PC Bluetooth에서 PhonePad 페어링")
+            appendLine("4. PC Bluetooth에서 기존 PhonePad 제거 후 재페어링")
             appendLine("5. 목록 새로고침")
             appendLine("6. 선택 호스트 연결")
             append("7. 오른쪽 터치패드 사용")
@@ -926,6 +926,7 @@ class MainActivity : Activity() {
         private const val POINTER_SCALE = 1.55f
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
+        private const val LOG_TAG = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)
@@ -969,6 +970,13 @@ class MainActivity : Activity() {
             0x25, 0x7F,
             0x75, 0x08,
             0x95, 0x03,
+            0x81, 0x06,
+            0x05, 0x0C,
+            0x0A, 0x38, 0x02,
+            0x15, 0x81,
+            0x25, 0x7F,
+            0x75, 0x08,
+            0x95, 0x01,
             0x81, 0x06,
             0xC0,
             0xC0,
