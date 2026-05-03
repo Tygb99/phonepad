@@ -1,5 +1,7 @@
 # Roadmap
 
+> Korean version: [ko/ROADMAP.md](ko/ROADMAP.md)
+
 ## Purpose
 
 Keep the implementation order and scope boundaries clear for a solo/small-team build.

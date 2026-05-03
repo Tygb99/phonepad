@@ -1,33 +1,33 @@
-# Local Data
+# 로컬 데이터
 
-> Korean version: [ko/DB.md](ko/DB.md)
+> English original: [../DB.md](../DB.md)
 
-## Purpose
+## 목적
 
-Define local persistence for paired hosts, gesture profiles, gesture mappings, and app settings.
+페어링된 호스트, 제스처 프로필, 제스처 매핑, 앱 설정을 위한 로컬 영속성을 정의합니다.
 
-## Current State
+## 현재 상태
 
-PhonePad has no account system and no cloud sync. Local SQLite is enough for v1.0.
+PhonePad에는 계정 시스템과 클라우드 동기화가 없습니다. v1.0에는 로컬 SQLite로 충분합니다.
 
-## Current Rules
+## 현재 규칙
 
-- Store only non-sensitive local app state.
-- Do not store raw pointer input history.
-- Do not persist runtime connection state or Drag Mode state.
-- Keep schema migrations simple and covered by tests.
-- Default locale is Korean and default theme follows system unless changed.
+- 민감하지 않은 로컬 앱 상태만 저장합니다.
+- 원시 포인터 입력 기록은 저장하지 않습니다.
+- 런타임 연결 상태나 Drag Mode 상태는 저장하지 않습니다.
+- 스키마 마이그레이션은 단순하게 유지하고 테스트로 커버합니다.
+- 기본 로케일은 한국어이며 기본 테마는 변경 전까지 시스템을 따릅니다.
 
-## Entities
+## 엔티티
 
-| Entity | Purpose |
+| 엔티티 | 목적 |
 |---|---|
-| `paired_hosts` | Saved Bluetooth host records and default host choice. |
-| `gesture_profiles` | Built-in and user-created mapping profiles. |
-| `gesture_mappings` | Gesture-to-action rules per profile. |
-| `settings` | One-row app preferences. |
+| `paired_hosts` | 저장된 Bluetooth 호스트 기록과 기본 호스트 선택. |
+| `gesture_profiles` | 내장 및 사용자 생성 매핑 프로필. |
+| `gesture_mappings` | 프로필별 제스처-액션 규칙. |
+| `settings` | 단일 행 앱 환경설정. |
 
-## Schema
+## 스키마
 
 ```sql
 CREATE TABLE paired_hosts (
@@ -73,7 +73,7 @@ CREATE TABLE settings (
 );
 ```
 
-## Enums
+## 열거형
 
 ```text
 compat_state:
@@ -97,7 +97,7 @@ action_type:
 mouse_button, key_combo, media_key, none
 ```
 
-## Related Docs
+## 관련 문서
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [API.md](API.md)

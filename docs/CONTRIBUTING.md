@@ -1,5 +1,7 @@
 # Contributing
 
+> Korean version: [ko/CONTRIBUTING.md](ko/CONTRIBUTING.md)
+
 ## Purpose
 
 Set collaboration rules for early PhonePad work, especially when product, Android HID, and optional dongle work happen in parallel.

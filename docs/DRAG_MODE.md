@@ -1,5 +1,7 @@
 # Drag Mode
 
+> Korean version: [ko/DRAG_MODE.md](ko/DRAG_MODE.md)
+
 ## Purpose
 
 Specify the explicit Drag Mode toggle so drag behavior is reliable on a phone touch surface and never leaves the host in a stuck mouse-button state.

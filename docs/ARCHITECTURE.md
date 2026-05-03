@@ -1,5 +1,7 @@
 # Architecture
 
+> Korean version: [ko/ARCHITECTURE.md](ko/ARCHITECTURE.md)
+
 ## Purpose
 
 Describe how PhonePad turns touch input into Bluetooth HID reports while keeping the desktop side serverless.

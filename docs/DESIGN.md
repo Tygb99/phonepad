@@ -1,5 +1,7 @@
 # Design
 
+> Korean version: [ko/DESIGN.md](ko/DESIGN.md)
+
 ## Purpose
 
 Define the user-facing screens, interaction states, and copy rules for a Korean-first trackpad utility.

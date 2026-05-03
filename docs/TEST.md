@@ -1,5 +1,7 @@
 # Test Plan
 
+> Korean version: [ko/TEST.md](ko/TEST.md)
+
 ## Purpose
 
 Define the compatibility, input, lifecycle, Drag Mode, and release tests needed before PhonePad v1.0 can be trusted.

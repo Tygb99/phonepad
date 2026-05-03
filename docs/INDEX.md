@@ -1,5 +1,7 @@
 # Documentation Index
 
+> Korean version: [ko/INDEX.md](ko/INDEX.md)
+
 ## Purpose
 
 This is the navigation hub for PhonePad engineering, design, testing, release, and collaboration docs.

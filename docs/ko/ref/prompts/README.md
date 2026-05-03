@@ -1,24 +1,24 @@
-# AI Coding Prompts
+# AI 코딩 프롬프트
 
-> Korean version: [../../ko/ref/prompts/README.md](../../ko/ref/prompts/README.md)
+> English original: [../../../ref/prompts/README.md](../../../ref/prompts/README.md)
 
-## Purpose
+## 목적
 
-Provide reusable prompts for AI coding tools so implementation stays aligned with PhonePad constraints.
+구현이 PhonePad 제약과 계속 맞도록 AI 코딩 도구용 재사용 프롬프트를 제공합니다.
 
-## Current State
+## 현재 상태
 
-Use these prompts as starting points. Keep generated code small, tested, and tied to real Android hardware evidence.
+이 프롬프트를 출발점으로 사용합니다. 생성 코드는 작고 테스트되어야 하며 실제 Android 하드웨어 근거와 연결되어야 합니다.
 
-## Current Rules
+## 현재 규칙
 
-- Ask for implementation plus verification steps.
-- Require no `INTERNET` permission.
-- Require Drag Mode safety release checks for input changes.
-- Require docs updates when behavior changes.
-- Do not include private PRD drafts or chat logs in prompts.
+- 구현과 검증 단계를 함께 요청합니다.
+- `INTERNET` 권한이 없도록 요구합니다.
+- 입력 변경에는 Drag Mode 안전 해제 확인을 요구합니다.
+- 동작이 바뀌면 문서 업데이트를 요구합니다.
+- 프롬프트에 비공개 PRD 초안이나 채팅 로그를 포함하지 않습니다.
 
-## Phase 0 Kotlin HID Spike Prompt
+## Phase 0 Kotlin HID Spike 프롬프트
 
 ```text
 Implement a minimal Android Kotlin spike for PhonePad that checks Android API level,
@@ -33,7 +33,7 @@ Constraints:
 - add a short test checklist for Windows 11 and macOS
 ```
 
-## Drag Mode Review Prompt
+## Drag Mode 리뷰 프롬프트
 
 ```text
 Review this PhonePad change for Drag Mode safety.
@@ -47,7 +47,7 @@ Check:
 - tests cover repeated ON/OFF and safety events
 ```
 
-## Manifest Review Prompt
+## Manifest 리뷰 프롬프트
 
 ```text
 Review the Android manifest and Gradle files for PhonePad.
@@ -60,7 +60,7 @@ Must confirm:
 - notification permission is requested at runtime, not as unexplained onboarding
 ```
 
-## Related Docs
+## 관련 문서
 
 - [../../HID.md](../../HID.md)
 - [../../DRAG_MODE.md](../../DRAG_MODE.md)

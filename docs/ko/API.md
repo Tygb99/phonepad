@@ -1,24 +1,24 @@
-# Internal API
+# 내부 API
 
-> Korean version: [ko/API.md](ko/API.md)
+> English original: [../API.md](../API.md)
 
-## Purpose
+## 목적
 
-Define the app-internal interfaces between Flutter, Android native HID code, runtime controllers, and the optional Bridge Dongle spike.
+Flutter, Android 네이티브 HID 코드, 런타임 컨트롤러, 선택적 Bridge Dongle 스파이크 사이의 앱 내부 인터페이스를 정의합니다.
 
-## Current State
+## 현재 상태
 
-No public web API is planned for v1.0. This document covers local MethodChannel/EventChannel contracts and the draft dongle packet protocol.
+v1.0에는 공개 웹 API를 계획하지 않습니다. 이 문서는 로컬 MethodChannel/EventChannel 계약과 동글 패킷 프로토콜 초안을 다룹니다.
 
-## Current Rules
+## 현재 규칙
 
-- Keep the Flutter/native boundary small.
-- Native Kotlin owns Bluetooth HID registration and report sending.
-- Flutter owns trackpad UI, visible state, settings screens, and gesture input surface.
-- Expose errors as typed codes, not free-form strings only.
-- Do not add network APIs for v1.0.
+- Flutter/native 경계는 작게 유지합니다.
+- 네이티브 Kotlin이 Bluetooth HID 등록과 리포트 전송을 소유합니다.
+- Flutter가 트랙패드 UI, 표시 상태, 설정 화면, 제스처 입력 표면을 소유합니다.
+- 오류는 자유 형식 문자열만이 아니라 타입화된 코드로 노출합니다.
+- v1.0에는 네트워크 API를 추가하지 않습니다.
 
-## Flutter To Android Native
+## Flutter에서 Android 네이티브로
 
 ```kotlin
 getCompatStatus(): CompatStatus
@@ -36,7 +36,7 @@ sendKeyReport(modifiers: Int, keycodes: List<Int>)
 releaseAllMouseButtons(): Boolean
 ```
 
-## Android Native To Flutter Events
+## Android 네이티브에서 Flutter 이벤트로
 
 ```kotlin
 onCompatStatusChanged(status)
@@ -48,7 +48,7 @@ onMouseButtonReleaseAttempt(reason, success)
 onError(code, message)
 ```
 
-## Runtime Controller Rules
+## 런타임 컨트롤러 규칙
 
 ```kotlin
 enableDragMode()
@@ -66,7 +66,7 @@ onPointerMove(dx, dy)
 // otherwise: buttons = 0
 ```
 
-## Bridge Dongle Packet Draft
+## Bridge Dongle 패킷 초안
 
 ```text
 Packet: MouseMove
@@ -87,17 +87,17 @@ Packet: Control
 - command: release_all_buttons | ping | ack
 ```
 
-## Error Code Families
+## 오류 코드 계열
 
-| Prefix | Meaning |
+| 접두사 | 의미 |
 |---|---|
-| `compat.*` | Android version, Bluetooth, HID profile, or permission failure. |
-| `hid.*` | Registration, descriptor, sendReport, unregister failure. |
-| `host.*` | Pairing, reconnect, active host, or OS preset failure. |
-| `drag.*` | Drag Mode state or release failure. |
-| `perm.*` | Runtime permission denial or missing declaration. |
+| `compat.*` | Android 버전, Bluetooth, HID 프로필, 권한 실패. |
+| `hid.*` | 등록, 디스크립터, sendReport, 등록 해제 실패. |
+| `host.*` | 페어링, 재연결, 활성 호스트, OS 프리셋 실패. |
+| `drag.*` | Drag Mode 상태 또는 해제 실패. |
+| `perm.*` | 런타임 권한 거부 또는 선언 누락. |
 
-## Related Docs
+## 관련 문서
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [HID.md](HID.md)

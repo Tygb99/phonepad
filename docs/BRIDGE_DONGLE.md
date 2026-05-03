@@ -1,5 +1,7 @@
 # Bridge Dongle
 
+> Korean version: [ko/BRIDGE_DONGLE.md](ko/BRIDGE_DONGLE.md)
+
 ## Purpose
 
 Track the optional hardware Plan B: phone to BLE dongle to USB HID host input.

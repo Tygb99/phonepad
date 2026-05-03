@@ -1,5 +1,7 @@
 # Quick Reference
 
+> Korean version: [ko/QUICK_REF.md](ko/QUICK_REF.md)
+
 ## Purpose
 
 Keep the product contract visible for fast implementation decisions.

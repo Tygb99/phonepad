@@ -1,5 +1,7 @@
 # Deployment
 
+> Korean version: [ko/DEPLOY.md](ko/DEPLOY.md)
+
 ## Purpose
 
 Define how PhonePad is built, released, and described publicly without overpromising unsupported behavior.

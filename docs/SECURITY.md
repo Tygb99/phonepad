@@ -1,5 +1,7 @@
 # Security And Privacy
 
+> Korean version: [ko/SECURITY.md](ko/SECURITY.md)
+
 ## Purpose
 
 Document the trust model for an app that handles user input and presents itself as a local Bluetooth device.

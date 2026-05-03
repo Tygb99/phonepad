@@ -1,5 +1,7 @@
 # Mobile App
 
+> Korean version: [ko/MOBILE_APP.md](ko/MOBILE_APP.md)
+
 ## Purpose
 
 Capture Android app implementation, build, permission, foreground service, and store-distribution rules.

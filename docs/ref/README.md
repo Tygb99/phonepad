@@ -1,5 +1,7 @@
 # Reference
 
+> Korean version: [../ko/ref/README.md](../ko/ref/README.md)
+
 ## Purpose
 
 Collect non-product reference material, templates, and working prompts that help implementation without committing private planning exports.

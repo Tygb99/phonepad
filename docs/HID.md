@@ -1,5 +1,7 @@
 # Bluetooth HID
 
+> Korean version: [ko/HID.md](ko/HID.md)
+
 ## Purpose
 
 Define the Direct Bluetooth HID path that makes Android appear as a standard input device to Windows and macOS.

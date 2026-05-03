@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> Korean version: [CLAUDE.ko.md](CLAUDE.ko.md)
+
 ## Purpose
 
 This file gives AI coding agents the current product rules for PhonePad so they can implement without reopening private planning sources.

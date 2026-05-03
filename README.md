@@ -1,5 +1,7 @@
 # PhonePad
 
+> Korean version: [README.ko.md](README.ko.md)
+
 PhonePad is an Android-first input app that turns a phone screen into a Bluetooth trackpad-style controller for Windows and macOS.
 
 The v1.0 path is Android Direct Bluetooth HID Device mode: the host computer should see the phone as a standard Bluetooth mouse/keyboard composite device, without installing a desktop server app.
