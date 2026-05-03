@@ -67,6 +67,7 @@ class MainActivity : Activity() {
     private var sentReportCount = 0
     private var failedReportCount = 0
     private var lastReportSummary = "아직 전송 없음"
+    private var previousBluetoothName: String? = null
 
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
 
@@ -547,11 +548,19 @@ class MainActivity : Activity() {
             openBluetoothSettings()
             return
         }
+        val adapter = bluetoothAdapter
+        if (adapter != null && adapter.name != ADVERTISED_DEVICE_NAME) {
+            previousBluetoothName = adapter.name
+            val renamed = adapter.setName(ADVERTISED_DEVICE_NAME)
+            if (!renamed) {
+                setStatus("Bluetooth 이름을 PhonePad로 바꾸지 못했습니다. PC에는 '${adapter.name}' 이름으로 보일 수 있습니다.")
+            }
+        }
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
             putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
         }
         startActivity(intent)
-        setStatus("PC의 Bluetooth 기기 추가 화면에서 PhonePad를 검색하세요.")
+        setStatus("PC의 Bluetooth 기기 추가 화면에서 PhonePad를 검색하세요. 안 보이면 폰 이름 '${previousBluetoothName ?: adapter?.name ?: "Android"}'도 확인하세요.")
     }
 
     @SuppressLint("MissingPermission")
@@ -812,7 +821,7 @@ class MainActivity : Activity() {
             appendLine("1. 권한 허용")
             appendLine("2. HID 등록")
             appendLine("3. 검색 허용")
-            appendLine("4. PC Bluetooth에서 기존 PhonePad 제거 후 재페어링")
+            appendLine("4. PC Bluetooth에서 PhonePad 검색")
             appendLine("5. 목록 새로고침")
             appendLine("6. 선택 호스트 연결")
             append("7. 오른쪽 터치패드 사용")
@@ -927,6 +936,7 @@ class MainActivity : Activity() {
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
         private const val LOG_TAG = "PhonePad"
+        private const val ADVERTISED_DEVICE_NAME = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)

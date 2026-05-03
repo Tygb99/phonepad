@@ -35,7 +35,7 @@ app/build/outputs/apk/debug/app-debug.apk
 1. Tap `권한` and allow Nearby devices.
 2. Tap `HID 등록`.
 3. Tap `검색 허용`.
-4. Remove any old `PhonePad` Bluetooth device from the host PC, then pair `PhonePad` again.
+4. Remove any old `PhonePad` Bluetooth device from the host PC, then pair `PhonePad` again. The app sets the phone Bluetooth name to `PhonePad` while entering discoverable mode.
 5. Tap `목록 새로고침`.
 6. Select the paired host and tap `선택 호스트 연결`.
 7. Use the right-side touchpad mode.
