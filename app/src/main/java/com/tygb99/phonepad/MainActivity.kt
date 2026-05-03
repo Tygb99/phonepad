@@ -68,8 +68,24 @@ class MainActivity : Activity() {
     private var failedReportCount = 0
     private var lastReportSummary = "아직 전송 없음"
     private var previousBluetoothName: String? = null
+    private var activeScrollButton: Button? = null
+    private var activeScrollWheel = 0
 
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
+
+    private val scrollRepeatRunnable = object : Runnable {
+        override fun run() {
+            val button = activeScrollButton ?: return
+            val wheel = activeScrollWheel
+            if (wheel == 0) return
+            if (readyHostForInput(showStatus = false) == null) {
+                stopContinuousScroll()
+                return
+            }
+            sendMouseReport(0, 0, currentButtons(), wheel, 0)
+            button.postDelayed(this, SCROLL_REPEAT_INTERVAL_MS)
+        }
+    }
 
     private val bluetoothAdapter: BluetoothAdapter?
         get() = bluetoothManager.adapter
@@ -89,6 +105,7 @@ class MainActivity : Activity() {
 
         override fun onServiceDisconnected(profile: Int) {
             if (profile != BluetoothProfile.HID_DEVICE) return
+            stopContinuousScroll()
             releaseAllMouseButtons("hid_profile_disconnected")
             hidDevice = null
             activeHost = null
@@ -125,10 +142,12 @@ class MainActivity : Activity() {
                 }
                 BluetoothProfile.STATE_CONNECTING -> setStatus("호스트 연결 중: ${device.safeLabel()}")
                 BluetoothProfile.STATE_DISCONNECTING -> {
+                    stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnecting")
                     setStatus("호스트 연결 해제 중: ${device.safeLabel()}")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnected")
                     if (activeHost?.address == device?.address) activeHost = null
                     dragMode = false
@@ -139,6 +158,7 @@ class MainActivity : Activity() {
         }
 
         override fun onVirtualCableUnplug(device: BluetoothDevice?) {
+            stopContinuousScroll()
             releaseAllMouseButtons("virtual_cable_unplug")
             if (activeHost?.address == device?.address) activeHost = null
             dragMode = false
@@ -161,6 +181,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        stopContinuousScroll()
         if (dragMode) {
             releaseAllMouseButtons("activity_stopped")
             dragMode = false
@@ -171,6 +192,7 @@ class MainActivity : Activity() {
 
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
+        stopContinuousScroll()
         releaseAllMouseButtons("activity_destroyed")
         if (hasNearbyDevicePermissions()) hidDevice?.unregisterApp()
         hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
@@ -370,8 +392,8 @@ class MainActivity : Activity() {
             buttonRow(
                 actionButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
                 actionButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
-                actionButton("스크롤 ↑") { sendMouseReport(0, 0, currentButtons(), 5, 0) },
-                actionButton("스크롤 ↓") { sendMouseReport(0, 0, currentButtons(), -5, 0) },
+                scrollButton("스크롤 ↑", SCROLL_BUTTON_STEP),
+                scrollButton("스크롤 ↓", -SCROLL_BUTTON_STEP),
                 actionButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
             ),
             matchWrap(bottom = 10),
@@ -626,6 +648,7 @@ class MainActivity : Activity() {
             setStatus("연결 해제할 호스트가 없습니다.")
             return
         }
+        stopContinuousScroll()
         releaseAllMouseButtons("manual_disconnect")
         val accepted = hidDevice?.disconnect(host) == true
         activeHost = null
@@ -716,6 +739,40 @@ class MainActivity : Activity() {
             setStatus(if (ok) "Drag Mode를 켰습니다." else "Drag Mode 시작에 실패했습니다. 호스트 연결을 확인하세요.")
         }
         refreshControls()
+    }
+
+    private fun sendSingleScroll(wheel: Int) {
+        if (readyHostForInput(showStatus = true) == null) return
+        val ok = sendMouseReport(0, 0, currentButtons(), wheel, 0)
+        if (ok) {
+            trackpadSurface.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        } else {
+            setStatus("스크롤 보고서 전송에 실패했습니다. 호스트 연결을 확인하세요.")
+            refreshControls()
+        }
+    }
+
+    private fun startContinuousScroll(button: Button, wheel: Int): Boolean {
+        if (readyHostForInput(showStatus = true) == null) return false
+        stopContinuousScroll()
+        activeScrollButton = button
+        activeScrollWheel = wheel
+        val ok = sendMouseReport(0, 0, currentButtons(), wheel, 0)
+        if (!ok) {
+            stopContinuousScroll()
+            setStatus("스크롤 보고서 전송에 실패했습니다. 호스트 연결을 확인하세요.")
+            refreshControls()
+            return false
+        }
+        button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        button.postDelayed(scrollRepeatRunnable, SCROLL_INITIAL_REPEAT_DELAY_MS)
+        return true
+    }
+
+    private fun stopContinuousScroll() {
+        activeScrollButton?.removeCallbacks(scrollRepeatRunnable)
+        activeScrollButton = null
+        activeScrollWheel = 0
     }
 
     private fun clickMouse(button: Int) {
@@ -824,7 +881,7 @@ class MainActivity : Activity() {
             appendLine("4. PC Bluetooth에서 PhonePad 검색")
             appendLine("5. 목록 새로고침")
             appendLine("6. 선택 호스트 연결")
-            append("7. 오른쪽 터치패드 사용")
+            append("7. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
     }
 
@@ -894,6 +951,42 @@ class MainActivity : Activity() {
         }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private fun scrollButton(text: String, wheel: Int): Button {
+        var touchScrollConsumed = false
+        val button = actionButton(text) {
+            if (touchScrollConsumed) {
+                touchScrollConsumed = false
+            } else {
+                sendSingleScroll(wheel)
+            }
+        }
+        button.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.isPressed = true
+                    touchScrollConsumed = true
+                    startContinuousScroll(button, wheel)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    stopContinuousScroll()
+                    view.isPressed = false
+                    view.performClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    stopContinuousScroll()
+                    view.isPressed = false
+                    touchScrollConsumed = false
+                    true
+                }
+                else -> true
+            }
+        }
+        return button
+    }
+
     private fun buttonRow(vararg buttons: Button): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -935,6 +1028,9 @@ class MainActivity : Activity() {
         private const val POINTER_SCALE = 1.55f
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
+        private const val SCROLL_BUTTON_STEP = 5
+        private const val SCROLL_INITIAL_REPEAT_DELAY_MS = 220L
+        private const val SCROLL_REPEAT_INTERVAL_MS = 55L
         private const val LOG_TAG = "PhonePad"
         private const val ADVERTISED_DEVICE_NAME = "PhonePad"
 

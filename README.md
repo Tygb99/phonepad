@@ -47,6 +47,7 @@ This repository now includes a native Kotlin Android spike app for the Direct Bl
 - Current target: Android 16 / API 36
 - APK output: `app/build/outputs/apk/debug/app-debug.apk`
 - Runtime permissions: Bluetooth connect and advertise only; no `INTERNET` permission.
+- Validated setup: Windows 11 PC, macOS 26.4.1 development host, Galaxy S23 Ultra on Android 16.
 
 Device test order:
 
@@ -56,7 +57,7 @@ Device test order:
 4. Remove any old `PhonePad` Bluetooth device from the PC, then pair `PhonePad` again. The app sets the phone Bluetooth name to `PhonePad` while entering discoverable mode.
 5. Tap `목록 새로고침`.
 6. Select the paired host and tap `선택 호스트 연결`.
-7. Use the right-side touchpad area.
+7. Use the right-side touchpad area. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
 
 Build locally:
 
@@ -78,4 +79,4 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 
 Remote target: https://github.com/Tygb99/phonepad.git
 
-The repository has moved from documentation-only into the Phase 0 Android HID spike. Real host pairing and report delivery still need to be proven on physical Android devices and Windows/macOS hosts.
+The repository has moved from documentation-only into the Phase 0 Android HID spike. Real host pairing and mouse report delivery have been verified on a Galaxy S23 Ultra running Android 16 with a Windows 11 PC.

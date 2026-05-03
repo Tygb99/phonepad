@@ -47,6 +47,7 @@ PRD 초안과 내보낸 채팅 로그 같은 기획 원본은 의도적으로 gi
 - 현재 타깃: Android 16 / API 36
 - APK 출력: `app/build/outputs/apk/debug/app-debug.apk`
 - 런타임 권한: Bluetooth connect와 advertise만 사용하며 `INTERNET` 권한은 없습니다.
+- 검증 환경: Windows 11 PC, macOS 26.4.1 개발 호스트, Android 16 Galaxy S23 Ultra.
 
 기기 테스트 순서:
 
@@ -56,7 +57,7 @@ PRD 초안과 내보낸 채팅 로그 같은 기획 원본은 의도적으로 gi
 4. PC에서 기존 `PhonePad` Bluetooth 장치가 있으면 제거한 뒤 `PhonePad`를 다시 페어링합니다. 앱은 검색 가능 모드로 들어갈 때 휴대폰 Bluetooth 이름을 `PhonePad`로 설정합니다.
 5. `목록 새로고침`을 탭합니다.
 6. 페어링된 호스트를 선택하고 `선택 호스트 연결`을 탭합니다.
-7. 오른쪽 터치패드 영역을 사용합니다.
+7. 오른쪽 터치패드 영역을 사용합니다. `스크롤 ↑` 또는 `스크롤 ↓`를 누르고 있으면 계속 스크롤됩니다.
 
 로컬 빌드:
 
@@ -78,4 +79,4 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 
 원격 대상: https://github.com/Tygb99/phonepad.git
 
-이 저장소는 문서 전용 상태에서 Phase 0 Android HID 스파이크로 이동했습니다. 실제 호스트 페어링과 리포트 전달은 아직 물리 Android 기기 및 Windows/macOS 호스트에서 입증해야 합니다.
+이 저장소는 문서 전용 상태에서 Phase 0 Android HID 스파이크로 이동했습니다. Android 16 Galaxy S23 Ultra와 Windows 11 PC 조합에서 실제 호스트 페어링 및 마우스 리포트 전달을 검증했습니다.

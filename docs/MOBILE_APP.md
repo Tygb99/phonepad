@@ -14,6 +14,7 @@ The product is Android-first. A native Kotlin Phase 0 debug APK exists for real-
 
 - Android API 28+ is required.
 - Target SDK is currently Android 16 / API 36 for Galaxy S23 Ultra testing.
+- Verified Phase 0 setup: Windows 11 PC, macOS 26.4.1 development host, Galaxy S23 Ultra on Android 16.
 - The app must operate without `INTERNET`.
 - Foreground service is allowed only for an active connected-device use case.
 - Notification permission is requested after the user understands why reconnection/status needs it.
@@ -40,7 +41,7 @@ app/build/outputs/apk/debug/app-debug.apk
 4. Remove any old `PhonePad` Bluetooth device from the host PC, then pair `PhonePad` again. The app sets the phone Bluetooth name to `PhonePad` while entering discoverable mode.
 5. Tap `목록 새로고침`.
 6. Select the paired host and tap `선택 호스트 연결`.
-7. Use the right-side touchpad mode.
+7. Use the right-side touchpad mode. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
 
 Local build command:
 
