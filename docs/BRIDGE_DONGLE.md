@@ -31,6 +31,46 @@ Bridge Dongle
 Windows / macOS / possible BIOS or UEFI
 ```
 
+## Prior Art: ESPRemoteControl
+
+Reference links:
+
+- Reddit discussion: [Turn your iPhone into a wireless BLE keyboard + trackpad for any device with a USB port](https://www.reddit.com/r/esp32/comments/1qmqez2/turn_your_iphone_into_a_wireless_ble_keyboard/?tl=ko)
+- GitHub repo: [KoStard/ESPRemoteControl](https://github.com/KoStard/ESPRemoteControl)
+
+Observed architecture:
+
+```text
+iPhone SwiftUI app
+  Keyboard input, trackpad area, gestures
+      |
+      | Custom Bluetooth LE command protocol
+      v
+ESP32-S3 firmware
+  BLE receiver, command translation
+      |
+      | TinyUSB USB HID
+      v
+Target device
+  Standard USB keyboard and mouse
+```
+
+Why it matters for PhonePad:
+
+- It validates the phone -> BLE -> ESP32-S3 -> USB HID bridge pattern.
+- It uses ESP32-S3 native USB, TinyUSB, and NimBLE, which are useful starting points for the spike.
+- It shows the same broad input categories PhonePad cares about: keyboard input, cursor movement, left click, right click, scroll, function keys, and key combos.
+- It supports the product assumption that USB HID can cover devices where app-only Bluetooth HID is not enough.
+- It is better treated as prior art and spike reference than a drop-in dependency: the repo appears early-stage, has no release artifacts, and is iOS-first.
+
+PhonePad-specific follow-up checks:
+
+- Confirm whether the custom BLE command format is enough for Drag Mode button-hold semantics.
+- Add an explicit `release_all_buttons` control command if the reference protocol does not already guarantee safe release.
+- Measure BLE-to-USB HID latency and report-rate stability with PhonePad-like pointer movement.
+- Check whether Android can use the same BLE peripheral/central role cleanly, depending on the final dongle direction.
+- Record board, firmware stack, host OS, and USB HID descriptor details before claiming BIOS/UEFI or iOS support.
+
 ## Spike Success Criteria
 
 | Area | Success Criteria |

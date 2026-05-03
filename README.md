@@ -36,8 +36,34 @@ Start with:
 
 Planning sources such as PRD drafts and exported chat logs are intentionally ignored by git. Keep product docs in `docs/` and source code in the normal Flutter/Android project tree.
 
+## Android Phase 0 App
+
+This repository now includes a native Kotlin Android spike app for the Direct Bluetooth HID path.
+
+- Package: `com.tygb99.phonepad`
+- Minimum Android: API 28
+- Current target: Android 16 / API 36
+- APK output: `app/build/outputs/apk/debug/app-debug.apk`
+- Runtime permissions: Bluetooth connect and advertise only; no `INTERNET` permission.
+
+Build locally:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+./gradlew :app:assembleDebug
+```
+
+Install on a connected Android device:
+
+```bash
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Repository
 
 Remote target: https://github.com/Tygb99/phonepad.git
 
-The repository is expected to stay documentation-first until the Phase 0 Android HID spike proves the core path.
+The repository has moved from documentation-only into the Phase 0 Android HID spike. Real host pairing and report delivery still need to be proven on physical Android devices and Windows/macOS hosts.
