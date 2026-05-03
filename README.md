@@ -59,6 +59,8 @@ Device test order:
 6. Select the paired host and tap `선택 호스트 연결`.
 7. Use the right-side touchpad area. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
 
+Continuous scroll buttons send small paced wheel reports to avoid host-side scroll acceleration on macOS.
+
 Build locally:
 
 ```bash

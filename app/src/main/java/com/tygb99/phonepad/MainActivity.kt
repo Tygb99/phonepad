@@ -82,7 +82,11 @@ class MainActivity : Activity() {
                 stopContinuousScroll()
                 return
             }
-            sendMouseReport(0, 0, currentButtons(), wheel, 0)
+            if (!sendMouseReport(0, 0, currentButtons(), wheel, 0)) {
+                stopContinuousScroll()
+                refreshControls()
+                return
+            }
             button.postDelayed(this, SCROLL_REPEAT_INTERVAL_MS)
         }
     }
@@ -392,8 +396,8 @@ class MainActivity : Activity() {
             buttonRow(
                 actionButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
                 actionButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
-                scrollButton("스크롤 ↑", SCROLL_BUTTON_STEP),
-                scrollButton("스크롤 ↓", -SCROLL_BUTTON_STEP),
+                scrollButton("스크롤 ↑", SCROLL_UP),
+                scrollButton("스크롤 ↓", SCROLL_DOWN),
                 actionButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
             ),
             matchWrap(bottom = 10),
@@ -752,12 +756,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startContinuousScroll(button: Button, wheel: Int): Boolean {
+    private fun startContinuousScroll(button: Button, initialWheel: Int, repeatWheel: Int): Boolean {
         if (readyHostForInput(showStatus = true) == null) return false
         stopContinuousScroll()
         activeScrollButton = button
-        activeScrollWheel = wheel
-        val ok = sendMouseReport(0, 0, currentButtons(), wheel, 0)
+        activeScrollWheel = repeatWheel
+        val ok = sendMouseReport(0, 0, currentButtons(), initialWheel, 0)
         if (!ok) {
             stopContinuousScroll()
             setStatus("스크롤 보고서 전송에 실패했습니다. 호스트 연결을 확인하세요.")
@@ -952,13 +956,15 @@ class MainActivity : Activity() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun scrollButton(text: String, wheel: Int): Button {
+    private fun scrollButton(text: String, direction: Int): Button {
+        val tapWheel = direction * SCROLL_BUTTON_TAP_STEP
+        val repeatWheel = direction * SCROLL_BUTTON_REPEAT_STEP
         var touchScrollConsumed = false
         val button = actionButton(text) {
             if (touchScrollConsumed) {
                 touchScrollConsumed = false
             } else {
-                sendSingleScroll(wheel)
+                sendSingleScroll(tapWheel)
             }
         }
         button.setOnTouchListener { view, event ->
@@ -966,7 +972,7 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     view.isPressed = true
                     touchScrollConsumed = true
-                    startContinuousScroll(button, wheel)
+                    startContinuousScroll(button, tapWheel, repeatWheel)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -1028,9 +1034,12 @@ class MainActivity : Activity() {
         private const val POINTER_SCALE = 1.55f
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
-        private const val SCROLL_BUTTON_STEP = 5
-        private const val SCROLL_INITIAL_REPEAT_DELAY_MS = 220L
-        private const val SCROLL_REPEAT_INTERVAL_MS = 55L
+        private const val SCROLL_UP = 1
+        private const val SCROLL_DOWN = -1
+        private const val SCROLL_BUTTON_TAP_STEP = 2
+        private const val SCROLL_BUTTON_REPEAT_STEP = 1
+        private const val SCROLL_INITIAL_REPEAT_DELAY_MS = 260L
+        private const val SCROLL_REPEAT_INTERVAL_MS = 135L
         private const val LOG_TAG = "PhonePad"
         private const val ADVERTISED_DEVICE_NAME = "PhonePad"
 

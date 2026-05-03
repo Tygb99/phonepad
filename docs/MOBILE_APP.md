@@ -43,6 +43,8 @@ app/build/outputs/apk/debug/app-debug.apk
 6. Select the paired host and tap `선택 호스트 연결`.
 7. Use the right-side touchpad mode. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
 
+Continuous scroll buttons intentionally use small paced wheel reports to avoid host-side scroll acceleration on macOS.
+
 Local build command:
 
 ```bash
