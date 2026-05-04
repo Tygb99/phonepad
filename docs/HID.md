@@ -17,13 +17,16 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - Use a minimal mouse + keyboard composite descriptor for MVP.
 - Avoid `BLUETOOTH_SCAN` unless the Phase 0 permission spike proves it is required.
 - Do not implement Precision Touchpad descriptor in v1.0.
+- Main UX auto-registers the HID session when the app enters foreground and unregisters when the app leaves.
+- PC-visible Bluetooth name uses `PhonePad - {device name}`.
+- Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
 
 ## Android Build Baseline
 
 ```text
 minSdk: 28
-targetSdk: 35
-compileSdk: 35+
+targetSdk: 36
+compileSdk: 36
 foregroundServiceType: connectedDevice
 ```
 

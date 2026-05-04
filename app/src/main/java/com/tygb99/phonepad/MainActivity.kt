@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
@@ -17,6 +18,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -43,8 +46,6 @@ class MainActivity : Activity() {
     private lateinit var reportText: TextView
     private lateinit var trackpadHintText: TextView
     private lateinit var dragButton: Button
-    private lateinit var registerButton: Button
-    private lateinit var unregisterButton: Button
     private lateinit var discoverableButton: Button
     private lateinit var previousHostButton: Button
     private lateinit var nextHostButton: Button
@@ -70,7 +71,11 @@ class MainActivity : Activity() {
     private var previousBluetoothName: String? = null
     private var activeScrollButton: Button? = null
     private var activeScrollWheel = 0
+    private var autoSessionActive = false
+    private var discoverablePromptShown = false
+    private var externalBluetoothFlowActive = false
 
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
 
     private val scrollRepeatRunnable = object : Runnable {
@@ -91,6 +96,12 @@ class MainActivity : Activity() {
         }
     }
 
+    private val sessionCleanupRunnable = Runnable {
+        autoSessionActive = false
+        discoverablePromptShown = false
+        stopInputSession("activity_stopped", closeProfile = false)
+    }
+
     private val bluetoothAdapter: BluetoothAdapter?
         get() = bluetoothManager.adapter
 
@@ -99,10 +110,12 @@ class MainActivity : Activity() {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hidDevice = proxy as BluetoothHidDevice
             refreshBondedHosts(showStatus = false)
-            setStatus("HID 프로필을 열었습니다. HID 등록 또는 페어링된 호스트 연결을 진행하세요.")
+            setStatus("HID 프로필을 열었습니다. 자동 세션을 준비하는 중입니다.")
             if (pendingRegister) {
                 pendingRegister = false
                 registerHidApp()
+            } else {
+                startInputSession()
             }
             refreshControls()
         }
@@ -127,7 +140,8 @@ class MainActivity : Activity() {
             refreshBondedHosts(showStatus = false)
             if (registered) {
                 activeHost = pluggedDevice ?: connectedHost()
-                setStatus("HID 앱이 등록됐습니다. 왼쪽 연결 영역에서 PC를 연결한 뒤 터치패드를 사용하세요.")
+                setStatus("HID 세션이 준비됐습니다. PC Bluetooth에서 ${advertisedDeviceName()}를 찾아 페어링하세요.")
+                requestDiscoverableOnce()
             } else {
                 activeHost = null
                 dragMode = false
@@ -142,6 +156,8 @@ class MainActivity : Activity() {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     activeHost = device
+                    device?.rememberSuccessfulHost()
+                    refreshBondedHosts(showStatus = false)
                     setStatus("호스트와 연결됐습니다: ${device.safeLabel()}")
                 }
                 BluetoothProfile.STATE_CONNECTING -> setStatus("호스트 연결 중: ${device.safeLabel()}")
@@ -184,23 +200,39 @@ class MainActivity : Activity() {
         refreshControls()
     }
 
+    override fun onStart() {
+        super.onStart()
+        mainHandler.removeCallbacks(sessionCleanupRunnable)
+        if (!autoSessionActive) {
+            autoSessionActive = true
+            discoverablePromptShown = false
+        }
+        if (externalBluetoothFlowActive) externalBluetoothFlowActive = false
+        startInputSession()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (externalBluetoothFlowActive) externalBluetoothFlowActive = false
+    }
+
     override fun onStop() {
         stopContinuousScroll()
-        if (dragMode) {
-            releaseAllMouseButtons("activity_stopped")
-            dragMode = false
-            refreshControls()
+        if (externalBluetoothFlowActive) {
+            mainHandler.removeCallbacks(sessionCleanupRunnable)
+            mainHandler.postDelayed(sessionCleanupRunnable, EXTERNAL_FLOW_STOP_GRACE_MS)
+            super.onStop()
+            return
         }
+        mainHandler.removeCallbacks(sessionCleanupRunnable)
+        mainHandler.postDelayed(sessionCleanupRunnable, SESSION_STOP_GRACE_MS)
         super.onStop()
     }
 
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
-        stopContinuousScroll()
-        releaseAllMouseButtons("activity_destroyed")
-        if (hasNearbyDevicePermissions()) hidDevice?.unregisterApp()
-        hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
-        hidDevice = null
+        mainHandler.removeCallbacks(sessionCleanupRunnable)
+        stopInputSession("activity_destroyed", closeProfile = true)
         super.onDestroy()
     }
 
@@ -215,10 +247,10 @@ class MainActivity : Activity() {
         if (granted) {
             setStatus("Nearby devices 권한이 허용됐습니다.")
             refreshBondedHosts(showStatus = false)
-            if (pendingRegister) openHidProfile()
+            startInputSession()
         } else {
             pendingRegister = false
-            setStatus("Nearby devices 권한이 필요합니다. 권한 없이는 HID 등록과 호스트 연결을 진행할 수 없습니다.")
+            setStatus("Nearby devices 권한이 필요합니다. 권한 없이는 HID 세션과 호스트 연결을 진행할 수 없습니다.")
         }
         refreshControls()
     }
@@ -297,12 +329,8 @@ class MainActivity : Activity() {
             matchWrap(bottom = 8),
         )
 
-        discoverableButton = actionButton("검색 허용") { requestDiscoverable() }
-        column.addView(discoverableButton, matchWrap(bottom = 8))
-
-        registerButton = actionButton("HID 등록", ::prepareHidRegistration)
-        unregisterButton = actionButton("HID 해제", ::unregisterHidApp)
-        column.addView(buttonRow(registerButton, unregisterButton), matchWrap(bottom = 12))
+        discoverableButton = actionButton("검색 다시 허용") { requestDiscoverable() }
+        column.addView(discoverableButton, matchWrap(bottom = 12))
 
         hostText = infoBox()
         column.addView(hostText, matchWrap(bottom = 8))
@@ -372,7 +400,7 @@ class MainActivity : Activity() {
             setOnTouchListener(::handleTrackpadTouch)
         }
         trackpadHintText = TextView(this).apply {
-            text = "왼쪽 연결 영역에서 HID 등록과 호스트 연결을 완료하세요"
+            text = "자동 HID 세션을 준비하는 중입니다"
             textSize = 17f
             setTextColor(COLOR_TRACKPAD_LABEL)
             gravity = Gravity.CENTER
@@ -426,9 +454,9 @@ class MainActivity : Activity() {
         val adapter = bluetoothAdapter
         when {
             adapter == null -> setStatus("Bluetooth 어댑터를 찾을 수 없습니다.")
-            !adapter.isEnabled -> setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켠 뒤 HID 등록을 진행하세요.")
-            hasNearbyDevicePermissions() -> setStatus("준비됐습니다. HID 등록 후 PC를 페어링하거나 페어링된 호스트를 연결하세요.")
-            else -> setStatus("Nearby devices 권한을 허용하면 HID 등록을 진행할 수 있습니다.")
+            !adapter.isEnabled -> setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켜면 HID 세션이 자동으로 준비됩니다.")
+            hasNearbyDevicePermissions() -> setStatus("준비됐습니다. 앱이 HID 세션을 자동으로 준비합니다.")
+            else -> setStatus("Nearby devices 권한을 허용하면 HID 세션이 자동으로 준비됩니다.")
         }
     }
 
@@ -438,8 +466,6 @@ class MainActivity : Activity() {
             val adapterEnabled = bluetoothAdapter?.isEnabled == true
             val host = connectedHost()
             val canUseBluetooth = hasPermissions && adapterEnabled
-            registerButton.isEnabled = canUseBluetooth && !appRegistered
-            unregisterButton.isEnabled = hidDevice != null || appRegistered
             discoverableButton.isEnabled = canUseBluetooth
             previousHostButton.isEnabled = bondedHosts.size > 1
             nextHostButton.isEnabled = bondedHosts.size > 1
@@ -456,7 +482,7 @@ class MainActivity : Activity() {
             hostText.text = buildHostText(host)
             reportText.text = buildReportText()
             trackpadHintText.text = when {
-                !appRegistered -> "HID 등록 전입니다"
+                !appRegistered -> "HID 세션 자동 준비 중"
                 host == null -> "호스트 연결 대기 중"
                 dragMode -> "Dragging · 손가락을 밀면 왼쪽 버튼을 누른 채 이동"
                 else -> "터치패드 활성 · 한 손가락 이동 / 두 손가락 스크롤 / 탭 클릭"
@@ -465,7 +491,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun prepareHidRegistration() {
+    private fun startInputSession() {
         pendingRegister = true
         if (!hasNearbyDevicePermissions()) {
             requestNearbyDevicePermissions()
@@ -473,16 +499,22 @@ class MainActivity : Activity() {
         }
         if (bluetoothAdapter?.isEnabled != true) {
             pendingRegister = false
-            setStatus("Bluetooth가 꺼져 있습니다. Bluetooth 설정에서 켜주세요.")
-            openBluetoothSettings()
+            setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켜면 HID 세션이 자동으로 준비됩니다.")
             return
         }
+        setAdvertisedBluetoothName()
         if (hidDevice == null) {
             openHidProfile()
             return
         }
+        if (!appRegistered) {
+            pendingRegister = false
+            registerHidApp()
+            return
+        }
         pendingRegister = false
-        registerHidApp()
+        requestDiscoverableOnce()
+        refreshControls()
     }
 
     @SuppressLint("MissingPermission")
@@ -510,7 +542,7 @@ class MainActivity : Activity() {
             return
         }
         val sdp = BluetoothHidDeviceAppSdpSettings(
-            "PhonePad",
+            advertisedDeviceName(),
             "Bluetooth HID mouse for PhonePad",
             "PhonePad",
             BluetoothHidDevice.SUBCLASS1_MOUSE,
@@ -518,28 +550,36 @@ class MainActivity : Activity() {
         )
         val accepted = device.registerApp(sdp, null, null, mainExecutor, hidCallback)
         setStatus(
-            if (accepted) "HID 등록 요청을 보냈습니다. 결과를 기다리는 중입니다."
-            else "HID 등록 요청이 거절됐습니다. 기기 또는 제조사 정책상 HID Device가 막혀 있을 수 있습니다.",
+            if (accepted) "HID 세션 등록 요청을 보냈습니다. 결과를 기다리는 중입니다."
+            else "HID 세션 등록 요청이 거절됐습니다. 기기 또는 제조사 정책상 HID Device가 막혀 있을 수 있습니다.",
         )
         refreshControls()
     }
 
     @SuppressLint("MissingPermission")
-    private fun unregisterHidApp() {
-        releaseAllMouseButtons("unregister")
+    private fun stopInputSession(reason: String, closeProfile: Boolean) {
+        stopContinuousScroll()
+        releaseAllMouseButtons(reason)
         dragMode = false
-        hidDevice?.unregisterApp()
+        if (hasNearbyDevicePermissions()) hidDevice?.unregisterApp()
         appRegistered = false
         activeHost = null
         connectionState = BluetoothProfile.STATE_DISCONNECTED
-        setStatus("HID 앱을 해제했습니다.")
-        refreshControls()
+        if (closeProfile) {
+            hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
+            hidDevice = null
+        }
+        if (!closeProfile && ::statusText.isInitialized) {
+            setStatus("앱이 백그라운드로 이동해 HID 세션을 정리했습니다.")
+            refreshControls()
+        }
     }
 
     private fun requestNearbyDevicePermissions() {
         if (hasNearbyDevicePermissions()) {
             setStatus("필요한 Bluetooth 권한이 이미 허용돼 있습니다.")
             refreshBondedHosts(showStatus = false)
+            startInputSession()
             refreshControls()
             return
         }
@@ -561,7 +601,14 @@ class MainActivity : Activity() {
     }
 
     private fun openBluetoothSettings() {
+        externalBluetoothFlowActive = true
         startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+    }
+
+    private fun requestDiscoverableOnce() {
+        if (discoverablePromptShown) return
+        discoverablePromptShown = true
+        requestDiscoverable()
     }
 
     @SuppressLint("MissingPermission")
@@ -575,31 +622,60 @@ class MainActivity : Activity() {
             return
         }
         val adapter = bluetoothAdapter
-        if (adapter != null && adapter.name != ADVERTISED_DEVICE_NAME) {
-            previousBluetoothName = adapter.name
-            val renamed = adapter.setName(ADVERTISED_DEVICE_NAME)
-            if (!renamed) {
-                setStatus("Bluetooth 이름을 PhonePad로 바꾸지 못했습니다. PC에는 '${adapter.name}' 이름으로 보일 수 있습니다.")
-            }
+        val visibleName = setAdvertisedBluetoothName()
+        if (visibleName == null) {
+            setStatus("Bluetooth 이름을 PhonePad 형식으로 바꾸지 못했습니다. PC에는 '${adapter?.name ?: "Android"}' 이름으로 보일 수 있습니다.")
         }
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
             putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
         }
+        externalBluetoothFlowActive = true
         startActivity(intent)
-        setStatus("PC의 Bluetooth 기기 추가 화면에서 PhonePad를 검색하세요. 안 보이면 폰 이름 '${previousBluetoothName ?: adapter?.name ?: "Android"}'도 확인하세요.")
+        setStatus("PC의 Bluetooth 기기 추가 화면에서 ${visibleName ?: adapter?.name ?: "PhonePad"}를 검색하세요.")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setAdvertisedBluetoothName(): String? {
+        if (!hasNearbyDevicePermissions()) return null
+        val adapter = bluetoothAdapter ?: return null
+        val targetName = advertisedDeviceName()
+        if (adapter.name == targetName) return targetName
+        previousBluetoothName = adapter.name
+        return if (adapter.setName(targetName)) targetName else null
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun advertisedDeviceName(): String {
+        val currentName = if (hasNearbyDevicePermissions()) bluetoothAdapter?.name?.trim().orEmpty() else ""
+        val alias = currentName
+            .takeIf { it.isNotBlank() }
+            ?.takeUnless { it == ADVERTISED_DEVICE_PREFIX || it.startsWith("$ADVERTISED_DEVICE_PREFIX -") }
+            ?: deviceModelAlias()
+        return "$ADVERTISED_DEVICE_PREFIX - ${alias.take(MAX_DEVICE_ALIAS_LENGTH)}"
+    }
+
+    private fun deviceModelAlias(): String {
+        val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.titlecase(Locale.US) }
+        return "$manufacturer ${Build.MODEL}".trim().ifBlank { "Android" }
     }
 
     @SuppressLint("MissingPermission")
     private fun refreshBondedHosts(showStatus: Boolean) {
+        val knownHostAddresses = knownHostAddresses()
         bondedHosts = if (hasNearbyDevicePermissions()) {
             bluetoothAdapter?.bondedDevices
+                ?.filter { device ->
+                    device.address in knownHostAddresses ||
+                        device.address == activeHost?.address ||
+                        device.isLikelyComputerHost()
+                }
                 ?.sortedBy { it.safeSortLabel() }
                 ?: emptyList()
         } else {
             emptyList()
         }
         if (selectedHostIndex !in bondedHosts.indices) selectedHostIndex = 0
-        if (showStatus) setStatus("페어링된 기기 ${bondedHosts.size}개를 불러왔습니다.")
+        if (showStatus) setStatus("페어링된 PC 후보 ${bondedHosts.size}개를 불러왔습니다.")
         refreshControls()
     }
 
@@ -624,13 +700,13 @@ class MainActivity : Activity() {
             return
         }
         if (!appRegistered || hidDevice == null) {
-            setStatus("먼저 HID 등록을 완료하세요.")
+            setStatus("HID 세션을 자동 준비 중입니다. 잠시 후 다시 시도하세요.")
             return
         }
         val host = selectedHost()
         if (host == null) {
             refreshBondedHosts(showStatus = false)
-            setStatus("페어링된 호스트가 없습니다. PC Bluetooth 설정에서 PhonePad를 먼저 페어링하세요.")
+            setStatus("페어링된 PC 후보가 없습니다. PC Bluetooth 설정에서 ${advertisedDeviceName()}를 먼저 페어링하세요.")
             return
         }
         val accepted = hidDevice?.connect(host) == true
@@ -719,8 +795,8 @@ class MainActivity : Activity() {
         val host = connectedHost()
         val message = when {
             !hasNearbyDevicePermissions() -> "Bluetooth 권한이 필요합니다."
-            !appRegistered -> "HID 등록이 필요합니다."
-            host == null -> "HID는 등록됐지만 호스트 연결이 없습니다. 왼쪽에서 페어링된 PC를 선택해 연결하세요."
+            !appRegistered -> "HID 세션을 자동 준비 중입니다."
+            host == null -> "호스트 연결이 없습니다. 왼쪽에서 페어링된 PC를 선택해 연결하세요."
             else -> null
         }
         if (message != null && showStatus) {
@@ -847,12 +923,14 @@ class MainActivity : Activity() {
         val current = activeHost
         if (current != null && hid.getConnectionState(current) == BluetoothProfile.STATE_CONNECTED) {
             connectionState = BluetoothProfile.STATE_CONNECTED
+            current.rememberSuccessfulHost()
             return current
         }
         val connected = hid.connectedDevices.firstOrNull()
         if (connected != null) {
             activeHost = connected
             connectionState = BluetoothProfile.STATE_CONNECTED
+            connected.rememberSuccessfulHost()
         }
         return connected
     }
@@ -865,7 +943,7 @@ class MainActivity : Activity() {
             appendLine("활성 호스트: ${host.safeLabel()}")
             appendLine("연결 상태: ${connectionState.toConnectionLabel()}")
             appendLine("선택 호스트: ${selected.safeLabel()}")
-            append("페어링 목록: ${bondedHosts.size}개")
+            append("PC 후보 목록: ${bondedHosts.size}개")
         }
     }
 
@@ -880,13 +958,34 @@ class MainActivity : Activity() {
     private fun setupGuideText(): String {
         return buildString {
             appendLine("1. 권한 허용")
-            appendLine("2. HID 등록")
-            appendLine("3. 검색 허용")
-            appendLine("4. PC Bluetooth에서 PhonePad 검색")
-            appendLine("5. 목록 새로고침")
-            appendLine("6. 선택 호스트 연결")
-            append("7. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
+            appendLine("2. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
+            appendLine("3. 페어링 완료")
+            appendLine("4. 목록 새로고침")
+            appendLine("5. 선택 호스트 연결")
+            append("6. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
+    }
+
+    private fun knownHostAddresses(): Set<String> {
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getStringSet(KEY_KNOWN_HOSTS, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun BluetoothDevice.rememberSuccessfulHost() {
+        val knownHosts = knownHostAddresses()
+        if (address in knownHosts) return
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_KNOWN_HOSTS, knownHosts + address)
+            .apply()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothDevice.isLikelyComputerHost(): Boolean {
+        if (!hasNearbyDevicePermissions()) return false
+        return bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER
     }
 
     @SuppressLint("MissingPermission")
@@ -1040,8 +1139,13 @@ class MainActivity : Activity() {
         private const val SCROLL_BUTTON_REPEAT_STEP = 1
         private const val SCROLL_INITIAL_REPEAT_DELAY_MS = 260L
         private const val SCROLL_REPEAT_INTERVAL_MS = 135L
+        private const val SESSION_STOP_GRACE_MS = 1200L
+        private const val EXTERNAL_FLOW_STOP_GRACE_MS = 30000L
+        private const val MAX_DEVICE_ALIAS_LENGTH = 32
+        private const val PREFS_NAME = "phonepad"
+        private const val KEY_KNOWN_HOSTS = "known_hosts"
         private const val LOG_TAG = "PhonePad"
-        private const val ADVERTISED_DEVICE_NAME = "PhonePad"
+        private const val ADVERTISED_DEVICE_PREFIX = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)

@@ -52,14 +52,14 @@ This repository now includes a native Kotlin Android spike app for the Direct Bl
 Device test order:
 
 1. Tap `권한` and allow Nearby devices.
-2. Tap `HID 등록`.
-3. Tap `검색 허용`.
-4. Remove any old `PhonePad` Bluetooth device from the PC, then pair `PhonePad` again. The app sets the phone Bluetooth name to `PhonePad` while entering discoverable mode.
-5. Tap `목록 새로고침`.
-6. Select the paired host and tap `선택 호스트 연결`.
-7. Use the right-side touchpad area. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
+2. The app automatically prepares the HID session and requests discoverable mode.
+3. Remove any old `PhonePad` Bluetooth device from the PC, then pair the visible `PhonePad - {device name}` device.
+4. Tap `목록 새로고침`.
+5. Select the paired PC host and tap `선택 호스트 연결`.
+6. Use the right-side touchpad area. Hold `스크롤 ↑` or `스크롤 ↓` to keep scrolling.
 
 Continuous scroll buttons send small paced wheel reports to avoid host-side scroll acceleration on macOS.
+The host list only shows paired computer-like devices and PCs that have previously connected successfully.
 
 Build locally:
 

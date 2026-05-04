@@ -17,13 +17,16 @@ v1.0의 핵심 가정은 Android `BluetoothHidDevice`입니다. Phase 0에서는
 - MVP에는 최소 마우스 + 키보드 복합 디스크립터를 사용합니다.
 - Phase 0 권한 스파이크가 필요성을 입증하기 전에는 `BLUETOOTH_SCAN`을 피합니다.
 - v1.0에는 Precision Touchpad 디스크립터를 구현하지 않습니다.
+- 메인 UX는 앱이 전면에 들어오면 HID 세션을 자동 등록하고 앱을 나가면 자동 해제합니다.
+- PC에 표시되는 Bluetooth 이름은 `PhonePad - {기기명}` 형식을 사용합니다.
+- 호스트 선택은 임의의 주변 기기를 숨기고, 페어링된 컴퓨터형 기기와 과거 연결 성공 이력이 있는 PC만 보여줍니다.
 
 ## Android 빌드 기준선
 
 ```text
 minSdk: 28
-targetSdk: 35
-compileSdk: 35+
+targetSdk: 36
+compileSdk: 36
 foregroundServiceType: connectedDevice
 ```
 
