@@ -1,6 +1,7 @@
 # Local planning sources
 prd-*.md
 KakaoTalk_Chat_*.csv
+gpt의견/
 
 # Flutter / Dart
 .dart_tool/
