@@ -18,6 +18,8 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - Avoid `BLUETOOTH_SCAN` unless the Phase 0 permission spike proves it is required.
 - Do not implement Precision Touchpad descriptor in v1.0.
 - Main UX auto-registers the HID session when the app enters foreground and unregisters when the app leaves.
+- App foreground entry never opens the Android discoverable prompt by itself; only the new-PC action does.
+- The app quietly attempts automatic reconnect to the last successful host after HID registration.
 - PC-visible Bluetooth name uses `PhonePad - {device name}`.
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
 
