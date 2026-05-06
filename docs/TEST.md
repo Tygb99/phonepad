@@ -67,7 +67,7 @@ Pass criteria:
 
 ## Phase 0 Feedback Checks
 
-- New-PC flow: after a newly bonded host returns to the app, it becomes the switch target and connection is attempted without an extra manual tap.
+- New-PC flow: after a newly bonded host returns to the app, it becomes the switch target; press `호스트 연결/전환` to make the HID connect attempt.
 - Multi-pairing: previous/next changes only the switch target; actual switching requires `호스트 연결/전환`.
 - Windows re-pair reset: delete PhonePad on Windows, select the stale Windows host in the app, use `Android 페어링 삭제`, then run `새 PC 연결` and pair again.
 - Double-tap drag: verify default OFF, option persistence, tap-tap-hold movement, and all-buttons-up on finger-up/cancel.

@@ -83,6 +83,7 @@ class MainActivity : Activity() {
     private var autoSessionActive = false
     private var externalBluetoothFlowActive = false
     private var autoReconnectAttempted = false
+    private var skipAutoReconnectOnce = false
     private var pendingAutoReconnectAddress: String? = null
     private var pendingDiscoverableRequest = false
     private var pendingConnectionAddress: String? = null
@@ -91,7 +92,6 @@ class MainActivity : Activity() {
     private var pendingHostSwitchReason: String? = null
     private var timedOutConnectionAddress: String? = null
     private var preDiscoverableBondedAddresses: Set<String> = emptySet()
-    private var pendingNewPairingAddress: String? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
@@ -117,6 +117,7 @@ class MainActivity : Activity() {
     private val sessionCleanupRunnable = Runnable {
         autoSessionActive = false
         autoReconnectAttempted = false
+        skipAutoReconnectOnce = false
         pendingAutoReconnectAddress = null
         pendingDiscoverableRequest = false
         stopInputSession("activity_stopped", closeProfile = false)
@@ -202,7 +203,10 @@ class MainActivity : Activity() {
                 setStatus("HID 세션이 준비됐습니다. 최근 PC 자동 재연결을 확인하는 중입니다.")
                 if (pendingDiscoverableRequest) {
                     requestDiscoverable()
-                } else if (!attemptPendingNewPairingConnect()) {
+                } else if (skipAutoReconnectOnce) {
+                    skipAutoReconnectOnce = false
+                    setStatus("새 PC 연결 흐름에서 돌아왔습니다. PC 후보를 확인하는 중입니다.")
+                } else {
                     attemptAutoReconnect()
                 }
             } else {
@@ -312,11 +316,13 @@ class MainActivity : Activity() {
         if (!autoSessionActive) {
             autoSessionActive = true
             autoReconnectAttempted = false
+            skipAutoReconnectOnce = false
             pendingAutoReconnectAddress = null
             pendingDiscoverableRequest = false
         }
         val returnedFromBluetoothFlow = externalBluetoothFlowActive
         if (externalBluetoothFlowActive) externalBluetoothFlowActive = false
+        if (returnedFromBluetoothFlow) skipAutoReconnectOnce = true
         startInputSession()
         if (returnedFromBluetoothFlow) {
             mainHandler.postDelayed({ handleReturnFromNewPcFlow() }, NEW_PAIRING_SCAN_DELAY_MS)
@@ -642,6 +648,9 @@ class MainActivity : Activity() {
         pendingRegister = false
         if (pendingDiscoverableRequest) {
             requestDiscoverable()
+        } else if (skipAutoReconnectOnce) {
+            skipAutoReconnectOnce = false
+            setStatus("새 PC 연결 흐름에서 돌아왔습니다. PC 후보를 확인하는 중입니다.")
         } else {
             attemptAutoReconnect()
         }
@@ -692,6 +701,7 @@ class MainActivity : Activity() {
         stopContinuousScroll()
         releaseAllMouseButtons(reason)
         pendingAutoReconnectAddress = null
+        skipAutoReconnectOnce = false
         pendingDiscoverableRequest = false
         clearPendingConnection()
         clearPendingHostSwitch()
@@ -793,32 +803,13 @@ class MainActivity : Activity() {
         refreshBondedHosts(showStatus = false)
         val index = bondedHosts.indexOfFirst { it.address == newHost.address }
         if (index >= 0) selectedHostIndex = index
-        pendingNewPairingAddress = newHost.address
-        setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 연결을 이어갑니다.")
-
-        if (appRegistered && hidDevice != null) {
-            attemptPendingNewPairingConnect()
-        } else {
-            startInputSession()
-        }
-        refreshControls()
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun attemptPendingNewPairingConnect(): Boolean {
-        val address = pendingNewPairingAddress ?: return false
-        if (!hasNearbyDevicePermissions() || !appRegistered || hidDevice == null) return true
-        refreshBondedHosts(showStatus = false)
-        val host = bondedHosts.firstOrNull { it.address == address }
-            ?: bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == address }
-            ?: run {
-                pendingNewPairingAddress = null
-                return false
-            }
-        pendingNewPairingAddress = null
         autoReconnectAttempted = true
-        connectHost(host, reason = "new_pairing")
-        return true
+        pendingAutoReconnectAddress = null
+        mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
+        setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 0.1.6 방식처럼 호스트 연결/전환을 눌러 연결하세요.")
+
+        if (!appRegistered || hidDevice == null) startInputSession()
+        refreshControls()
     }
 
     @SuppressLint("MissingPermission")
@@ -1083,7 +1074,6 @@ class MainActivity : Activity() {
         clearPendingConnection(host.address)
         clearPendingHostSwitch(host.address)
         if (timedOutConnectionAddress == host.address) timedOutConnectionAddress = null
-        if (pendingNewPairingAddress == host.address) pendingNewPairingAddress = null
         forgetHostRecord(host.address)
         logHostDiagnostic("remove_bond_request", host)
         val accepted = host.removeBondCompat()
@@ -1383,7 +1373,8 @@ class MainActivity : Activity() {
             appendLine("4. 새 PC는 새 PC 연결 누르기")
             appendLine("5. Windows만 삭제했다면 Android 페어링 삭제")
             appendLine("6. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
-            append("7. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
+            appendLine("7. 페어링 후 호스트 연결/전환 누르기")
+            append("8. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
     }
 
