@@ -65,6 +65,14 @@ Pass criteria:
 - Success rate at least 90 percent.
 - Successful P95 reconnect time within 10 seconds.
 
+## Phase 0 Feedback Checks
+
+- New-PC flow: after a newly bonded host returns to the app, it becomes the switch target and connection is attempted without an extra manual tap.
+- Multi-pairing: previous/next changes only the switch target; actual switching requires `호스트 연결/전환`.
+- Double-tap drag: verify default OFF, option persistence, tap-tap-hold movement, and all-buttons-up on finger-up/cancel.
+- Scroll speed: verify slow/default/fast presets and confirm the default still avoids macOS hold-scroll over-acceleration.
+- Windows failure logging: when Windows reaches connecting then disconnected, capture `PhonePad` logcat `host_diag` and `connect_request_*` lines.
+
 ## Release Gate Checklist
 
 - `INTERNET` absent from manifest.

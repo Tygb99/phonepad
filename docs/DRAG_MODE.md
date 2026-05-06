@@ -9,12 +9,14 @@ Specify the explicit Drag Mode toggle so drag behavior is reliable on a phone to
 ## Current State
 
 Long-press drag is not the default. PhonePad uses a visible Drag toggle that sends left-button-down on enable and left-button-up on disable.
+Double-tap drag is available as an explicit user option and defaults OFF.
 
 ## Current Rules
 
 - Drag Mode state is runtime-only and must not be persisted to SQLite.
 - App startup always begins with Drag Mode OFF.
 - Drag Mode ON disables one-finger tap-to-click and three-finger gesture recognition.
+- Optional double-tap drag starts only when enabled and the second tap is held within the tap timeout/slop.
 - Every safety event attempts all-buttons-up before changing host, unregistering, or exiting.
 - Stuck left button count must be zero in release tests.
 
@@ -41,6 +43,15 @@ any state
 | 3 | Tap `Dragging` | Set state to `release_pending`, send all-buttons-up. |
 | 4 | Release succeeds | Set state to `off`. |
 | 5 | Release may have failed | Show warning and recovery guidance. |
+
+Optional double-tap drag flow:
+
+| Step | User Action | System Action |
+|---|---|---|
+| 1 | Enable `더블탭 Drag` | Persist the preference. |
+| 2 | Tap once, then tap-and-hold shortly after | Send left-button-down. |
+| 3 | Move one finger | Send movement reports with left-button bit set. |
+| 4 | Lift finger | Send all-buttons-up. |
 
 ## Safety Events
 
@@ -71,6 +82,7 @@ Always call `releaseAllMouseButtons()` for:
 4. Safety events send all-buttons-up.
 5. Reopening the app never restores Drag Mode ON.
 6. Repeated ON/OFF cycles pass at least 30 iterations per test device/host pair.
+7. Double-tap drag remains OFF after a fresh install and only works after the option is enabled.
 
 ## Related Docs
 

@@ -52,6 +52,8 @@ class MainActivity : Activity() {
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
     private lateinit var trackpadSurface: FrameLayout
+    private lateinit var doubleTapDragButton: Button
+    private lateinit var scrollSpeedButton: Button
 
     private var hidDevice: BluetoothHidDevice? = null
     private var activeHost: BluetoothDevice? = null
@@ -62,6 +64,12 @@ class MainActivity : Activity() {
     private var lastY = 0f
     private var gestureDistance = 0f
     private var usingScrollGesture = false
+    private var doubleTapDragEnabled = false
+    private var doubleTapDragActive = false
+    private var lastTapUpTime = 0L
+    private var lastTapX = 0f
+    private var lastTapY = 0f
+    private var scrollSpeedPreset = SCROLL_SPEED_DEFAULT
     private var bondedHosts: List<BluetoothDevice> = emptyList()
     private var selectedHostIndex = 0
     private var connectionState = BluetoothProfile.STATE_DISCONNECTED
@@ -75,6 +83,8 @@ class MainActivity : Activity() {
     private var externalBluetoothFlowActive = false
     private var autoReconnectAttempted = false
     private var pendingAutoReconnectAddress: String? = null
+    private var preDiscoverableBondedAddresses: Set<String> = emptySet()
+    private var pendingNewPairingAddress: String? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
@@ -93,7 +103,7 @@ class MainActivity : Activity() {
                 refreshControls()
                 return
             }
-            button.postDelayed(this, SCROLL_REPEAT_INTERVAL_MS)
+            button.postDelayed(this, scrollRepeatIntervalMs())
         }
     }
 
@@ -156,7 +166,7 @@ class MainActivity : Activity() {
             if (registered) {
                 activeHost = pluggedDevice ?: connectedHost()
                 setStatus("HID 세션이 준비됐습니다. 최근 PC 자동 재연결을 확인하는 중입니다.")
-                attemptAutoReconnect()
+                if (!attemptPendingNewPairingConnect()) attemptAutoReconnect()
             } else {
                 activeHost = null
                 dragMode = false
@@ -168,6 +178,7 @@ class MainActivity : Activity() {
 
         override fun onConnectionStateChanged(device: BluetoothDevice?, state: Int) {
             connectionState = state
+            logHostDiagnostic("callback_state_${state.toConnectionLabel()}", device)
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     activeHost = device
@@ -186,6 +197,7 @@ class MainActivity : Activity() {
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnected")
+                    if (doubleTapDragActive) doubleTapDragActive = false
                     val wasAutoReconnect = pendingAutoReconnectAddress == device?.address
                     if (wasAutoReconnect) {
                         pendingAutoReconnectAddress = null
@@ -220,6 +232,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         bluetoothManager = getSystemService(BluetoothManager::class.java)
+        loadInputSettings()
         setContentView(buildContentView())
         updateDeviceText()
         refreshBondedHosts(showStatus = false)
@@ -230,13 +243,17 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         mainHandler.removeCallbacks(sessionCleanupRunnable)
-        if (!autoSessionActive) {
+            if (!autoSessionActive) {
             autoSessionActive = true
             autoReconnectAttempted = false
             pendingAutoReconnectAddress = null
         }
+        val returnedFromBluetoothFlow = externalBluetoothFlowActive
         if (externalBluetoothFlowActive) externalBluetoothFlowActive = false
         startInputSession()
+        if (returnedFromBluetoothFlow) {
+            mainHandler.postDelayed({ handleReturnFromNewPcFlow() }, NEW_PAIRING_SCAN_DELAY_MS)
+        }
     }
 
     override fun onResume() {
@@ -375,7 +392,7 @@ class MainActivity : Activity() {
             matchWrap(bottom = 8),
         )
 
-        connectButton = actionButton("선택 호스트 연결", ::connectSelectedHost)
+        connectButton = actionButton("호스트 연결/전환", ::connectSelectedHost)
         disconnectButton = actionButton("연결 해제", ::disconnectActiveHost)
         column.addView(buttonRow(connectButton, disconnectButton), matchWrap(bottom = 12))
 
@@ -462,7 +479,11 @@ class MainActivity : Activity() {
         dragButton = actionButton("Drag", ::toggleDragMode).apply {
             minHeight = dp(54)
         }
-        panel.addView(dragButton, matchWrap())
+        panel.addView(dragButton, matchWrap(bottom = 8))
+
+        doubleTapDragButton = actionButton("", ::toggleDoubleTapDrag)
+        scrollSpeedButton = actionButton("", ::cycleScrollSpeed)
+        panel.addView(buttonRow(doubleTapDragButton, scrollSpeedButton), matchWrap())
 
         return panel
     }
@@ -507,6 +528,13 @@ class MainActivity : Activity() {
                 dp(8),
                 if (dragMode) COLOR_DRAG_STROKE else COLOR_BUTTON_STROKE,
             )
+            doubleTapDragButton.text = if (doubleTapDragEnabled) "더블탭 Drag ON" else "더블탭 Drag OFF"
+            doubleTapDragButton.background = rounded(
+                if (doubleTapDragEnabled) COLOR_INPUT_ACTIVE else COLOR_BUTTON,
+                dp(8),
+                if (doubleTapDragEnabled) COLOR_INPUT_STROKE else COLOR_BUTTON_STROKE,
+            )
+            scrollSpeedButton.text = String.format(Locale.US, "스크롤 %s", scrollSpeedLabel())
             hostText.text = buildHostText(host)
             reportText.text = buildReportText()
             trackpadHintText.text = when {
@@ -591,6 +619,7 @@ class MainActivity : Activity() {
         pendingAutoReconnectAddress = null
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
         dragMode = false
+        doubleTapDragActive = false
         if (hasNearbyDevicePermissions()) hidDevice?.unregisterApp()
         appRegistered = false
         activeHost = null
@@ -653,9 +682,55 @@ class MainActivity : Activity() {
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
             putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
         }
+        preDiscoverableBondedAddresses = allBondedAddresses()
         externalBluetoothFlowActive = true
         startActivity(intent)
         setStatus("PC의 Bluetooth 기기 추가 화면에서 ${visibleName ?: adapter?.name ?: "PhonePad"}를 검색하세요.")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun handleReturnFromNewPcFlow() {
+        if (!hasNearbyDevicePermissions()) return
+        val newHost = bluetoothAdapter?.bondedDevices
+            ?.filter { it.address !in preDiscoverableBondedAddresses }
+            ?.sortedWith(compareByDescending<BluetoothDevice> { it.isLikelyComputerHost() }.thenBy { it.safeSortLabel() })
+            ?.firstOrNull()
+
+        if (newHost == null) {
+            refreshBondedHosts(showStatus = false)
+            return
+        }
+
+        rememberCandidateHost(newHost)
+        refreshBondedHosts(showStatus = false)
+        val index = bondedHosts.indexOfFirst { it.address == newHost.address }
+        if (index >= 0) selectedHostIndex = index
+        pendingNewPairingAddress = newHost.address
+        setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 연결을 이어갑니다.")
+
+        if (appRegistered && hidDevice != null) {
+            attemptPendingNewPairingConnect()
+        } else {
+            startInputSession()
+        }
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun attemptPendingNewPairingConnect(): Boolean {
+        val address = pendingNewPairingAddress ?: return false
+        if (!hasNearbyDevicePermissions() || !appRegistered || hidDevice == null) return true
+        refreshBondedHosts(showStatus = false)
+        val host = bondedHosts.firstOrNull { it.address == address }
+            ?: bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == address }
+            ?: run {
+                pendingNewPairingAddress = null
+                return false
+            }
+        pendingNewPairingAddress = null
+        autoReconnectAttempted = true
+        connectHost(host, reason = "new_pairing")
+        return true
     }
 
     @SuppressLint("MissingPermission")
@@ -682,19 +757,7 @@ class MainActivity : Activity() {
         val index = bondedHosts.indexOfFirst { it.address == candidate.address }
         if (index >= 0) selectedHostIndex = index
 
-        val accepted = hid.connect(candidate)
-        if (accepted) {
-            activeHost = candidate
-            connectionState = BluetoothProfile.STATE_CONNECTING
-            pendingAutoReconnectAddress = candidate.address
-            mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
-            mainHandler.postDelayed(autoReconnectTimeoutRunnable, AUTO_RECONNECT_TIMEOUT_MS)
-            setStatus("최근 PC 자동 재연결 시도 중: ${candidate.safeLabel()}")
-        } else {
-            pendingAutoReconnectAddress = null
-            connectionState = BluetoothProfile.STATE_DISCONNECTED
-            setStatus("최근 PC 자동 재연결 요청이 거절됐습니다. PC 후보를 선택해 다시 연결하거나 새 PC 연결을 눌러주세요.")
-        }
+        connectHost(candidate, reason = "auto_reconnect")
         refreshControls()
     }
 
@@ -726,10 +789,12 @@ class MainActivity : Activity() {
     @SuppressLint("MissingPermission")
     private fun refreshBondedHosts(showStatus: Boolean) {
         val knownHostAddresses = knownHostAddresses()
+        val candidateHostAddresses = candidateHostAddresses()
         bondedHosts = if (hasNearbyDevicePermissions()) {
             bluetoothAdapter?.bondedDevices
                 ?.filter { device ->
                     device.address in knownHostAddresses ||
+                        device.address in candidateHostAddresses ||
                         device.address == activeHost?.address ||
                         device.isLikelyComputerHost()
                 }
@@ -746,14 +811,14 @@ class MainActivity : Activity() {
     private fun selectPreviousHost() {
         if (bondedHosts.isEmpty()) return
         selectedHostIndex = (selectedHostIndex - 1 + bondedHosts.size) % bondedHosts.size
-        setStatus("선택 호스트: ${selectedHost().safeLabel()}")
+        setStatus("전환 대상: ${selectedHost().safeLabel()}")
         refreshControls()
     }
 
     private fun selectNextHost() {
         if (bondedHosts.isEmpty()) return
         selectedHostIndex = (selectedHostIndex + 1) % bondedHosts.size
-        setStatus("선택 호스트: ${selectedHost().safeLabel()}")
+        setStatus("전환 대상: ${selectedHost().safeLabel()}")
         refreshControls()
     }
 
@@ -773,17 +838,50 @@ class MainActivity : Activity() {
             setStatus("페어링된 PC 후보가 없습니다. PC Bluetooth 설정에서 ${advertisedDeviceName()}를 먼저 페어링하세요.")
             return
         }
-        val accepted = hidDevice?.connect(host) == true
+        connectHost(host, reason = "manual_switch")
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectHost(host: BluetoothDevice, reason: String): Boolean {
+        val hid = hidDevice
+        if (!hasNearbyDevicePermissions() || hid == null || !appRegistered) return false
+        val current = connectedHost()
+        if (current?.address == host.address) {
+            activeHost = current
+            connectionState = BluetoothProfile.STATE_CONNECTED
+            setStatus("이미 연결된 호스트입니다: ${host.safeLabel()}")
+            return true
+        }
+        if (current != null && current.address != host.address) {
+            releaseAllMouseButtons("host_switch")
+            hid.disconnect(current)
+        }
+        pendingAutoReconnectAddress = if (reason == "auto_reconnect") host.address else null
+        mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
+        logHostDiagnostic("connect_request_$reason", host)
+        val accepted = hid.connect(host)
         if (accepted) {
-            pendingAutoReconnectAddress = null
-            mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             activeHost = host
             connectionState = BluetoothProfile.STATE_CONNECTING
-            setStatus("호스트 연결 요청을 보냈습니다: ${host.safeLabel()}")
+            if (reason == "auto_reconnect") {
+                mainHandler.postDelayed(autoReconnectTimeoutRunnable, AUTO_RECONNECT_TIMEOUT_MS)
+            }
+            val actionLabel = when (reason) {
+                "auto_reconnect" -> "최근 PC 자동 재연결 시도 중"
+                "new_pairing" -> "새 PC 연결 시도 중"
+                else -> "호스트 연결/전환 요청을 보냈습니다"
+            }
+            setStatus("$actionLabel: ${host.safeLabel()}")
         } else {
-            setStatus("호스트 연결 요청이 거절됐습니다. PC Bluetooth 화면에서 PhonePad를 직접 연결해보세요.")
+            pendingAutoReconnectAddress = null
+            connectionState = BluetoothProfile.STATE_DISCONNECTED
+            val detail = hostDiagnosticSummary(host)
+            Log.w(LOG_TAG, "connect request rejected reason=$reason $detail")
+            setStatus("호스트 연결 요청이 거절됐습니다. 로그에서 Windows/HID 상태를 확인하세요.")
         }
         refreshControls()
+        return accepted
     }
 
     @SuppressLint("MissingPermission")
@@ -816,6 +914,13 @@ class MainActivity : Activity() {
                 lastY = event.y
                 gestureDistance = 0f
                 usingScrollGesture = false
+                doubleTapDragActive = shouldStartDoubleTapDrag(event)
+                if (doubleTapDragActive) {
+                    lastTapUpTime = 0L
+                    sendMouseReport(0, 0, LEFT_BUTTON, 0, 0)
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    setStatus("더블 탭 Drag 중입니다. 손을 떼면 해제됩니다.")
+                }
                 view.parent?.requestDisallowInterceptTouchEvent(true)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
@@ -842,8 +947,14 @@ class MainActivity : Activity() {
             }
             MotionEvent.ACTION_UP -> {
                 view.parent?.requestDisallowInterceptTouchEvent(false)
-                if (!dragMode && !usingScrollGesture && gestureDistance < dp(8)) {
+                if (doubleTapDragActive) {
+                    doubleTapDragActive = false
+                    releaseAllMouseButtons("double_tap_drag_up")
+                } else if (!dragMode && !usingScrollGesture && gestureDistance < dp(8)) {
                     clickMouse(LEFT_BUTTON)
+                    lastTapUpTime = event.eventTime
+                    lastTapX = event.x
+                    lastTapY = event.y
                 } else if (dragMode) {
                     sendMouseReport(0, 0, LEFT_BUTTON, 0, 0)
                 }
@@ -851,7 +962,12 @@ class MainActivity : Activity() {
             }
             MotionEvent.ACTION_CANCEL -> {
                 view.parent?.requestDisallowInterceptTouchEvent(false)
-                if (!dragMode) releaseAllMouseButtons("touch_cancel")
+                if (doubleTapDragActive) {
+                    doubleTapDragActive = false
+                    releaseAllMouseButtons("double_tap_drag_cancel")
+                } else if (!dragMode) {
+                    releaseAllMouseButtons("touch_cancel")
+                }
             }
         }
         return true
@@ -879,11 +995,48 @@ class MainActivity : Activity() {
             dragMode = false
             setStatus(if (ok) "Drag Mode를 껐습니다." else "버튼 해제 보고서를 보낼 호스트가 없습니다.")
         } else {
+            doubleTapDragActive = false
             val ok = sendMouseReport(0, 0, LEFT_BUTTON, 0, 0)
             dragMode = ok
             if (ok) trackpadSurface.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             setStatus(if (ok) "Drag Mode를 켰습니다." else "Drag Mode 시작에 실패했습니다. 호스트 연결을 확인하세요.")
         }
+        refreshControls()
+    }
+
+    private fun toggleDoubleTapDrag() {
+        doubleTapDragEnabled = !doubleTapDragEnabled
+        if (!doubleTapDragEnabled && doubleTapDragActive) {
+            doubleTapDragActive = false
+            releaseAllMouseButtons("double_tap_drag_disabled")
+        }
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DOUBLE_TAP_DRAG_ENABLED, doubleTapDragEnabled)
+            .apply()
+        setStatus(if (doubleTapDragEnabled) "더블 탭 Drag를 켰습니다." else "더블 탭 Drag를 껐습니다.")
+        refreshControls()
+    }
+
+    private fun shouldStartDoubleTapDrag(event: MotionEvent): Boolean {
+        if (!doubleTapDragEnabled || dragMode || usingScrollGesture) return false
+        if (lastTapUpTime == 0L) return false
+        val withinTime = event.eventTime - lastTapUpTime <= DOUBLE_TAP_DRAG_TIMEOUT_MS
+        val withinDistance = abs(event.x - lastTapX) + abs(event.y - lastTapY) <= dp(DOUBLE_TAP_DRAG_SLOP_DP)
+        return withinTime && withinDistance
+    }
+
+    private fun cycleScrollSpeed() {
+        scrollSpeedPreset = when (scrollSpeedPreset) {
+            SCROLL_SPEED_SLOW -> SCROLL_SPEED_DEFAULT
+            SCROLL_SPEED_DEFAULT -> SCROLL_SPEED_FAST
+            else -> SCROLL_SPEED_SLOW
+        }
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_SCROLL_SPEED_PRESET, scrollSpeedPreset)
+            .apply()
+        setStatus("스크롤 버튼 속도: ${scrollSpeedLabel()}")
         refreshControls()
     }
 
@@ -911,7 +1064,7 @@ class MainActivity : Activity() {
             return false
         }
         button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        button.postDelayed(scrollRepeatRunnable, SCROLL_INITIAL_REPEAT_DELAY_MS)
+        button.postDelayed(scrollRepeatRunnable, scrollInitialDelayMs())
         return true
     }
 
@@ -940,7 +1093,7 @@ class MainActivity : Activity() {
         }, CLICK_RELEASE_DELAY_MS)
     }
 
-    private fun currentButtons(): Int = if (dragMode) LEFT_BUTTON else 0
+    private fun currentButtons(): Int = if (dragMode || doubleTapDragActive) LEFT_BUTTON else 0
 
     @SuppressLint("MissingPermission")
     private fun sendMouseReport(dx: Int, dy: Int, buttons: Int, wheel: Int, horizontalWheel: Int): Boolean {
@@ -1009,7 +1162,7 @@ class MainActivity : Activity() {
             appendLine("활성 호스트: ${host.safeLabel()}")
             appendLine("연결 상태: ${connectionState.toConnectionLabel()}")
             appendLine("최근 PC: ${lastSuccessfulHostName() ?: "없음"}")
-            appendLine("선택 호스트: ${selected.safeLabel()}")
+            appendLine("전환 대상: ${selected.safeLabel()}")
             append("PC 후보 목록: ${bondedHosts.size}개")
         }
     }
@@ -1026,16 +1179,68 @@ class MainActivity : Activity() {
         return buildString {
             appendLine("1. 권한 허용")
             appendLine("2. 기존 PC는 자동 재연결 대기")
-            appendLine("3. 실패하면 PC 후보 선택 후 연결")
+            appendLine("3. 실패하면 전환 대상 선택 후 연결")
             appendLine("4. 새 PC는 새 PC 연결 누르기")
             appendLine("5. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
             append("6. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
     }
 
+    private fun loadInputSettings() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        doubleTapDragEnabled = prefs.getBoolean(KEY_DOUBLE_TAP_DRAG_ENABLED, false)
+        scrollSpeedPreset = prefs.getInt(KEY_SCROLL_SPEED_PRESET, SCROLL_SPEED_DEFAULT)
+            .coerceIn(SCROLL_SPEED_SLOW, SCROLL_SPEED_FAST)
+    }
+
+    private fun scrollSpeedLabel(): String {
+        return when (scrollSpeedPreset) {
+            SCROLL_SPEED_SLOW -> "느림"
+            SCROLL_SPEED_FAST -> "빠름"
+            else -> "기본"
+        }
+    }
+
+    private fun scrollTapStep(): Int {
+        return when (scrollSpeedPreset) {
+            SCROLL_SPEED_FAST -> 3
+            else -> 2
+        }
+    }
+
+    private fun scrollRepeatStep(): Int {
+        return when (scrollSpeedPreset) {
+            SCROLL_SPEED_FAST -> 2
+            else -> 1
+        }
+    }
+
+    private fun scrollInitialDelayMs(): Long {
+        return when (scrollSpeedPreset) {
+            SCROLL_SPEED_SLOW -> 300L
+            SCROLL_SPEED_FAST -> 210L
+            else -> 260L
+        }
+    }
+
+    private fun scrollRepeatIntervalMs(): Long {
+        return when (scrollSpeedPreset) {
+            SCROLL_SPEED_SLOW -> 175L
+            SCROLL_SPEED_FAST -> 90L
+            else -> 135L
+        }
+    }
+
     private fun knownHostAddresses(): Set<String> {
         return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getStringSet(KEY_KNOWN_HOSTS, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun candidateHostAddresses(): Set<String> {
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getStringSet(KEY_CANDIDATE_HOSTS, emptySet())
             ?.toSet()
             ?: emptySet()
     }
@@ -1049,6 +1254,20 @@ class MainActivity : Activity() {
             .putString(KEY_LAST_HOST_NAME, safeLabel())
             .putLong(KEY_LAST_HOST_CONNECTED_AT, System.currentTimeMillis())
             .apply()
+    }
+
+    private fun rememberCandidateHost(device: BluetoothDevice) {
+        val candidates = candidateHostAddresses()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_CANDIDATE_HOSTS, candidates + device.address)
+            .apply()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun allBondedAddresses(): Set<String> {
+        if (!hasNearbyDevicePermissions()) return emptySet()
+        return bluetoothAdapter?.bondedDevices?.mapTo(mutableSetOf()) { it.address } ?: emptySet()
     }
 
     @SuppressLint("MissingPermission")
@@ -1065,6 +1284,22 @@ class MainActivity : Activity() {
         return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString(KEY_LAST_HOST_NAME, null)
             ?.takeIf { it.isNotBlank() }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun logHostDiagnostic(event: String, device: BluetoothDevice?) {
+        Log.d(LOG_TAG, "host_diag event=$event ${hostDiagnosticSummary(device)}")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun hostDiagnosticSummary(device: BluetoothDevice?): String {
+        if (device == null) return "host=null"
+        val hidState = if (hasNearbyDevicePermissions()) {
+            hidDevice?.getConnectionState(device)?.toConnectionLabel() ?: "profile_null"
+        } else {
+            "permission_missing"
+        }
+        return "name=${device.safeLabel()} address=${device.address} bond=${device.bondState} major=${device.bluetoothClass?.majorDeviceClass} hidState=$hidState selected=${selectedHost()?.address == device.address} known=${device.address in knownHostAddresses()} candidate=${device.address in candidateHostAddresses()} last=${getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_LAST_HOST_ADDRESS, null) == device.address}"
     }
 
     @SuppressLint("MissingPermission")
@@ -1141,14 +1376,12 @@ class MainActivity : Activity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun scrollButton(text: String, direction: Int): Button {
-        val tapWheel = direction * SCROLL_BUTTON_TAP_STEP
-        val repeatWheel = direction * SCROLL_BUTTON_REPEAT_STEP
         var touchScrollConsumed = false
         val button = actionButton(text) {
             if (touchScrollConsumed) {
                 touchScrollConsumed = false
             } else {
-                sendSingleScroll(tapWheel)
+                sendSingleScroll(direction * scrollTapStep())
             }
         }
         button.setOnTouchListener { view, event ->
@@ -1156,7 +1389,11 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     view.isPressed = true
                     touchScrollConsumed = true
-                    startContinuousScroll(button, tapWheel, repeatWheel)
+                    startContinuousScroll(
+                        button,
+                        direction * scrollTapStep(),
+                        direction * scrollRepeatStep(),
+                    )
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -1220,19 +1457,24 @@ class MainActivity : Activity() {
         private const val CLICK_RELEASE_DELAY_MS = 35L
         private const val SCROLL_UP = 1
         private const val SCROLL_DOWN = -1
-        private const val SCROLL_BUTTON_TAP_STEP = 2
-        private const val SCROLL_BUTTON_REPEAT_STEP = 1
-        private const val SCROLL_INITIAL_REPEAT_DELAY_MS = 260L
-        private const val SCROLL_REPEAT_INTERVAL_MS = 135L
+        private const val SCROLL_SPEED_SLOW = 0
+        private const val SCROLL_SPEED_DEFAULT = 1
+        private const val SCROLL_SPEED_FAST = 2
+        private const val DOUBLE_TAP_DRAG_TIMEOUT_MS = 320L
+        private const val DOUBLE_TAP_DRAG_SLOP_DP = 18
         private const val SESSION_STOP_GRACE_MS = 1200L
         private const val EXTERNAL_FLOW_STOP_GRACE_MS = 30000L
+        private const val NEW_PAIRING_SCAN_DELAY_MS = 900L
         private const val AUTO_RECONNECT_TIMEOUT_MS = 4500L
         private const val MAX_DEVICE_ALIAS_LENGTH = 32
         private const val PREFS_NAME = "phonepad"
         private const val KEY_KNOWN_HOSTS = "known_hosts"
+        private const val KEY_CANDIDATE_HOSTS = "candidate_hosts"
         private const val KEY_LAST_HOST_ADDRESS = "last_host_address"
         private const val KEY_LAST_HOST_NAME = "last_host_name"
         private const val KEY_LAST_HOST_CONNECTED_AT = "last_host_connected_at"
+        private const val KEY_DOUBLE_TAP_DRAG_ENABLED = "double_tap_drag_enabled"
+        private const val KEY_SCROLL_SPEED_PRESET = "scroll_speed_preset"
         private const val LOG_TAG = "PhonePad"
         private const val ADVERTISED_DEVICE_PREFIX = "PhonePad"
 
@@ -1251,6 +1493,8 @@ class MainActivity : Activity() {
         private val COLOR_BUTTON_STROKE = Color.rgb(96, 112, 134)
         private val COLOR_DRAG_ACTIVE = Color.rgb(169, 57, 68)
         private val COLOR_DRAG_STROKE = Color.rgb(236, 118, 130)
+        private val COLOR_INPUT_ACTIVE = Color.rgb(58, 106, 92)
+        private val COLOR_INPUT_STROKE = Color.rgb(132, 207, 178)
 
         private val MOUSE_DESCRIPTOR = intArrayOf(
             0x05, 0x01,

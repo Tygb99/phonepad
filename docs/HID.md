@@ -22,6 +22,8 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - The app quietly attempts automatic reconnect to the last successful host after HID registration.
 - PC-visible Bluetooth name uses `PhonePad - {device name}`.
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
+- Newly bonded hosts discovered after the new-PC flow are selected as the current switch target and connection is attempted without requiring another manual connect tap.
+- Windows connection failures must log HID callback state, bond state, Bluetooth class, selected/known/candidate flags, and `connect(host)` acceptance.
 
 ## Android Build Baseline
 
@@ -61,6 +63,8 @@ foregroundServiceType: connectedDevice
 - Keyboard report: modifiers plus up to six keycodes.
 - Drag Mode ON: mouse reports include left-button bit.
 - Drag Mode OFF: send a button-up report with all buttons cleared.
+- Double-tap drag is optional and defaults OFF; when enabled, the second tap-and-hold sends left-button-down until finger-up or a safety release.
+- Scroll buttons expose slow/default/fast presets so host-specific speed differences can be tuned without reintroducing macOS over-acceleration by default.
 - Safe release: send all-buttons-up on disconnect, unregister, host switch, app background exit path, screen lock, and process shutdown hook where possible.
 
 ## Host Testing Notes
