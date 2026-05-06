@@ -20,8 +20,15 @@ v1.0의 핵심 가정은 Android `BluetoothHidDevice`입니다. Phase 0에서는
 - 메인 UX는 앱이 전면에 들어오면 HID 세션을 자동 등록하고 앱을 나가면 자동 해제합니다.
 - 앱 전면 진입만으로는 Android 검색 허용 팝업을 열지 않으며, 새 PC 연결 동작에서만 엽니다.
 - HID 등록 뒤 마지막 성공 호스트로 조용히 자동 재연결을 시도합니다.
-- PC에 표시되는 Bluetooth 이름은 `PhonePad - {기기명}` 형식을 사용합니다.
+- 새 PC 연결 동작은 HID 앱 등록 콜백이 끝난 뒤 검색 허용을 띄우도록 대기시켜, Windows 페어링 타이밍을 `0.1.5`에서 동작하던 방식에 맞춥니다.
+- PC에 표시되는 Bluetooth 이름은 여러 휴대폰을 구분하기 쉽도록 `PhonePad - {기기명}` 형식을 사용합니다.
+- 새 PC 검색 가능 흐름 중에는 Windows가 일반 phone/audio 프로필이 아니라 mouse 프로필에 붙을 수 있도록 HID 등록을 검색 가능 시간 전체 동안 유지합니다.
 - 호스트 선택은 임의의 주변 기기를 숨기고, 페어링된 컴퓨터형 기기와 과거 연결 성공 이력이 있는 PC만 보여줍니다.
+- 새 PC 연결 흐름 뒤 새로 감지된 bonded host는 현재 전환 대상으로 선택하지만, Windows 호환성을 위해 최종 HID `connect()`는 `0.1.5`처럼 수동 `호스트 연결/전환` 동작에서만 수행합니다.
+- 호스트 전환은 순차 처리합니다. 현재 HID 호스트 연결 해제 콜백을 받은 뒤 전환 대상 연결을 시작합니다.
+- Windows 연결 실패는 HID callback 상태, bond 상태, Bluetooth class, selected/known/candidate 플래그, `connect(host)` 수락 여부를 로그에 남겨야 합니다.
+- 수동 전환과 새 PC 연결 시도는 HID connected 콜백이 오지 않으면 timeout 처리하고, 연결 중 상태에 머무르지 않도록 Windows 재페어링 안내를 표시합니다.
+- Windows에서만 장치를 삭제한 경우 새 PC 흐름을 다시 실행하기 전에 앱에서 선택된 호스트의 Android 페어링을 삭제할 수 있습니다.
 
 ## Android 빌드 기준선
 
@@ -61,6 +68,8 @@ foregroundServiceType: connectedDevice
 - 키보드 리포트: modifiers와 최대 6개 keycodes.
 - Drag Mode ON: 마우스 리포트에 왼쪽 버튼 bit 포함.
 - Drag Mode OFF: 모든 버튼을 지운 button-up 리포트 전송.
+- 더블 탭 드래그는 선택 기능이며 기본값은 OFF입니다. 켜진 경우 두 번째 탭을 유지하면 손을 뗄 때까지 left-button-down을 보냅니다.
+- 스크롤 버튼은 느림/기본/빠름 프리셋을 제공해 기본 macOS 과가속 완화값을 유지하면서 호스트별 체감 속도 차이를 조정합니다.
 - 안전 해제: 연결 해제, 등록 해제, 호스트 전환, 앱 백그라운드 종료 경로, 화면 잠금, 가능한 경우 프로세스 종료 훅에서 all-buttons-up 전송.
 
 ## 호스트 테스트 노트

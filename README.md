@@ -60,6 +60,7 @@ Device test order:
 Continuous scroll buttons send small paced wheel reports to avoid host-side scroll acceleration on macOS.
 The host list only shows paired computer-like devices and PCs that have previously connected successfully.
 Opening the app alone does not show the Android discoverable prompt.
+`호스트 연결/전환` is for switching among paired PCs. Double-tap drag is available as an explicit OFF-by-default option, and scroll button speed can be changed between slow/default/fast.
 
 Build locally:
 
