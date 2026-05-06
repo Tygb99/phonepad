@@ -1286,7 +1286,7 @@ class MainActivity : Activity() {
         )
         val ok = hid.sendReport(device, MOUSE_REPORT_ID, payload)
         val summary = "dx=$dx dy=$dy wheel=$wheel hWheel=$horizontalWheel buttons=$buttons"
-        Log.d(LOG_TAG, "send mouse report ok=$ok host=${device.address} $summary")
+        if (!ok) Log.w(LOG_TAG, "send mouse report failed host=${device.address} $summary")
         return recordReport(ok, summary)
     }
 
@@ -1296,7 +1296,7 @@ class MainActivity : Activity() {
         val hid = hidDevice ?: return false
         if (!hasNearbyDevicePermissions() || device == null || !appRegistered) return false
         val ok = hid.sendReport(device, MOUSE_REPORT_ID, byteArrayOf(0, 0, 0, 0, 0))
-        Log.d(LOG_TAG, "release mouse buttons ok=$ok host=${device.address} reason=$reason")
+        if (!ok) Log.w(LOG_TAG, "release mouse buttons failed host=${device.address} reason=$reason")
         recordReport(ok, "release_all reason=$reason")
         if (!ok && reason != "activity_destroyed") {
             setStatus("버튼 해제 보고서 전송에 실패했습니다: $reason")
