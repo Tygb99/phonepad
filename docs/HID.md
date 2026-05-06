@@ -20,6 +20,7 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - Main UX auto-registers the HID session when the app enters foreground and unregisters when the app leaves.
 - App foreground entry never opens the Android discoverable prompt by itself; only the new-PC action does.
 - The app quietly attempts automatic reconnect to the last successful host after HID registration.
+- The new-PC action queues discoverable mode until the HID app registration callback has completed, matching the Windows pairing timing that worked in `0.1.6`.
 - PC-visible Bluetooth name uses `PhonePad - {device name}`.
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
 - Newly bonded hosts discovered after the new-PC flow are selected as the current switch target and connection is attempted without requiring another manual connect tap.

@@ -84,6 +84,7 @@ class MainActivity : Activity() {
     private var externalBluetoothFlowActive = false
     private var autoReconnectAttempted = false
     private var pendingAutoReconnectAddress: String? = null
+    private var pendingDiscoverableRequest = false
     private var pendingConnectionAddress: String? = null
     private var pendingConnectionReason: String? = null
     private var pendingHostSwitchAddress: String? = null
@@ -117,6 +118,7 @@ class MainActivity : Activity() {
         autoSessionActive = false
         autoReconnectAttempted = false
         pendingAutoReconnectAddress = null
+        pendingDiscoverableRequest = false
         stopInputSession("activity_stopped", closeProfile = false)
     }
 
@@ -176,6 +178,7 @@ class MainActivity : Activity() {
             stopContinuousScroll()
             releaseAllMouseButtons("hid_profile_disconnected")
             pendingAutoReconnectAddress = null
+            pendingDiscoverableRequest = false
             clearPendingConnection()
             clearPendingHostSwitch()
             timedOutConnectionAddress = null
@@ -197,10 +200,15 @@ class MainActivity : Activity() {
             if (registered) {
                 activeHost = pluggedDevice ?: connectedHost()
                 setStatus("HID 세션이 준비됐습니다. 최근 PC 자동 재연결을 확인하는 중입니다.")
-                if (!attemptPendingNewPairingConnect()) attemptAutoReconnect()
+                if (pendingDiscoverableRequest) {
+                    requestDiscoverable()
+                } else if (!attemptPendingNewPairingConnect()) {
+                    attemptAutoReconnect()
+                }
             } else {
                 clearPendingConnection()
                 clearPendingHostSwitch()
+                pendingDiscoverableRequest = false
                 activeHost = null
                 dragMode = false
                 connectionState = BluetoothProfile.STATE_DISCONNECTED
@@ -301,10 +309,11 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         mainHandler.removeCallbacks(sessionCleanupRunnable)
-            if (!autoSessionActive) {
+        if (!autoSessionActive) {
             autoSessionActive = true
             autoReconnectAttempted = false
             pendingAutoReconnectAddress = null
+            pendingDiscoverableRequest = false
         }
         val returnedFromBluetoothFlow = externalBluetoothFlowActive
         if (externalBluetoothFlowActive) externalBluetoothFlowActive = false
@@ -631,7 +640,11 @@ class MainActivity : Activity() {
             return
         }
         pendingRegister = false
-        attemptAutoReconnect()
+        if (pendingDiscoverableRequest) {
+            requestDiscoverable()
+        } else {
+            attemptAutoReconnect()
+        }
         refreshControls()
     }
 
@@ -679,6 +692,7 @@ class MainActivity : Activity() {
         stopContinuousScroll()
         releaseAllMouseButtons(reason)
         pendingAutoReconnectAddress = null
+        pendingDiscoverableRequest = false
         clearPendingConnection()
         clearPendingHostSwitch()
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
@@ -730,12 +744,21 @@ class MainActivity : Activity() {
 
     @SuppressLint("MissingPermission")
     private fun requestDiscoverable() {
+        pendingDiscoverableRequest = true
         if (!hasNearbyDevicePermissions()) {
             requestNearbyDevicePermissions()
             return
         }
         if (bluetoothAdapter?.isEnabled != true) {
             openBluetoothSettings()
+            return
+        }
+        if (hidDevice == null || !appRegistered) {
+            pendingAutoReconnectAddress = null
+            mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
+            setStatus("새 PC 연결을 위해 HID 세션을 먼저 준비합니다.")
+            startInputSession()
+            refreshControls()
             return
         }
         val adapter = bluetoothAdapter
@@ -748,6 +771,7 @@ class MainActivity : Activity() {
         }
         preDiscoverableBondedAddresses = allBondedAddresses()
         externalBluetoothFlowActive = true
+        pendingDiscoverableRequest = false
         startActivity(intent)
         setStatus("PC의 Bluetooth 기기 추가 화면에서 ${visibleName ?: adapter?.name ?: "PhonePad"}를 검색하세요.")
     }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.tygb99.phonepad"
         minSdk = 28
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.1.12-phase0"
+        versionCode = 14
+        versionName = "0.1.13-phase0"
     }
 
     buildTypes {
