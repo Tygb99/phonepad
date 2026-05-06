@@ -6,6 +6,12 @@ PhonePad is an Android-first input app that turns a phone screen into a Bluetoot
 
 The v1.0 path is Android Direct Bluetooth HID Device mode: the host computer should see the phone as a standard Bluetooth mouse/keyboard composite device, without installing a desktop server app.
 
+PhonePad is free and open source under the GNU General Public License v3.0 or later.
+You can build it yourself or download APKs from GitHub Releases. A paid Play Store version may be offered later as a convenience build with automatic updates; purchasing it supports continued development.
+
+PhonePad does not use ads, accounts, analytics, tracking SDKs, or internet permission.
+Sponsor links are prepared through GitHub Sponsors: [github.com/sponsors/Tygb99](https://github.com/sponsors/Tygb99).
+
 ## Product Scope
 
 - Android API 28+ compatibility check for `BluetoothHidDevice`.
@@ -83,3 +89,5 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 Remote target: https://github.com/Tygb99/phonepad.git
 
 The repository has moved from documentation-only into the Phase 0 Android HID spike. Real host pairing and mouse report delivery have been verified on a Galaxy S23 Ultra running Android 16 with a Windows 11 PC.
+
+Code is licensed under GPL-3.0-or-later. The PhonePad name, logo, and branding are not licensed for confusing commercial redistribution.
