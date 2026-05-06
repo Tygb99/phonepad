@@ -51,6 +51,7 @@ class MainActivity : Activity() {
     private lateinit var nextHostButton: Button
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
+    private lateinit var removeBondButton: Button
     private lateinit var trackpadSurface: FrameLayout
     private lateinit var doubleTapDragButton: Button
     private lateinit var scrollSpeedButton: Button
@@ -85,6 +86,8 @@ class MainActivity : Activity() {
     private var pendingAutoReconnectAddress: String? = null
     private var pendingConnectionAddress: String? = null
     private var pendingConnectionReason: String? = null
+    private var pendingHostSwitchAddress: String? = null
+    private var pendingHostSwitchReason: String? = null
     private var timedOutConnectionAddress: String? = null
     private var preDiscoverableBondedAddresses: Set<String> = emptySet()
     private var pendingNewPairingAddress: String? = null
@@ -174,6 +177,7 @@ class MainActivity : Activity() {
             releaseAllMouseButtons("hid_profile_disconnected")
             pendingAutoReconnectAddress = null
             clearPendingConnection()
+            clearPendingHostSwitch()
             timedOutConnectionAddress = null
             mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             hidDevice = null
@@ -196,6 +200,7 @@ class MainActivity : Activity() {
                 if (!attemptPendingNewPairingConnect()) attemptAutoReconnect()
             } else {
                 clearPendingConnection()
+                clearPendingHostSwitch()
                 activeHost = null
                 dragMode = false
                 connectionState = BluetoothProfile.STATE_DISCONNECTED
@@ -212,6 +217,7 @@ class MainActivity : Activity() {
                     activeHost = device
                     pendingAutoReconnectAddress = null
                     clearPendingConnection()
+                    clearPendingHostSwitch()
                     if (timedOutConnectionAddress == device?.address) timedOutConnectionAddress = null
                     mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
                     device?.rememberSuccessfulHost()
@@ -222,7 +228,11 @@ class MainActivity : Activity() {
                 BluetoothProfile.STATE_DISCONNECTING -> {
                     stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnecting")
-                    if (timedOutConnectionAddress != device?.address && pendingConnectionAddress == null) {
+                    if (
+                        timedOutConnectionAddress != device?.address &&
+                        pendingConnectionAddress == null &&
+                        pendingHostSwitchAddress == null
+                    ) {
                         setStatus("호스트 연결 해제 중: ${device.safeLabel()}")
                     }
                 }
@@ -234,6 +244,7 @@ class MainActivity : Activity() {
                     val wasPendingConnection = pendingConnectionAddress == device?.address
                     val wasTimedOutConnection = timedOutConnectionAddress == device?.address
                     val hasOtherPendingConnection = pendingConnectionAddress != null && !wasPendingConnection
+                    val hasPendingHostSwitch = pendingHostSwitchAddress != null
                     if (wasAutoReconnect) {
                         pendingAutoReconnectAddress = null
                         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
@@ -245,7 +256,12 @@ class MainActivity : Activity() {
                     }
                     if (activeHost?.address == device?.address) activeHost = null
                     dragMode = false
-                    if (!wasAutoReconnect && !wasPendingConnection && !wasTimedOutConnection && !hasOtherPendingConnection) setStatus("호스트 연결이 끊어졌습니다.")
+                    if (hasPendingHostSwitch) {
+                        setStatus("이전 호스트 연결이 끊어졌습니다. 다음 호스트 연결을 준비합니다.")
+                        attemptPendingHostSwitch()
+                    } else if (!wasAutoReconnect && !wasPendingConnection && !wasTimedOutConnection && !hasOtherPendingConnection) {
+                        setStatus("호스트 연결이 끊어졌습니다.")
+                    }
                 }
             }
             refreshControls()
@@ -259,6 +275,7 @@ class MainActivity : Activity() {
                 mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             }
             clearPendingConnection(device?.address)
+            clearPendingHostSwitch(device?.address)
             if (timedOutConnectionAddress == device?.address) timedOutConnectionAddress = null
             if (activeHost?.address == device?.address) activeHost = null
             dragMode = false
@@ -435,7 +452,10 @@ class MainActivity : Activity() {
 
         connectButton = actionButton("호스트 연결/전환", ::connectSelectedHost)
         disconnectButton = actionButton("연결 해제", ::disconnectActiveHost)
-        column.addView(buttonRow(connectButton, disconnectButton), matchWrap(bottom = 12))
+        column.addView(buttonRow(connectButton, disconnectButton), matchWrap(bottom = 8))
+
+        removeBondButton = actionButton("Android 페어링 삭제", ::removeSelectedHostBond)
+        column.addView(removeBondButton, matchWrap(bottom = 12))
 
         reportText = infoBox()
         column.addView(reportText, matchWrap())
@@ -561,6 +581,7 @@ class MainActivity : Activity() {
             nextHostButton.isEnabled = bondedHosts.size > 1
             connectButton.isEnabled = canUseBluetooth && appRegistered && hidDevice != null && selectedHost() != null
             disconnectButton.isEnabled = canUseBluetooth && hidDevice != null && host != null
+            removeBondButton.isEnabled = canUseBluetooth && selectedHost() != null
             trackpadSurface.isEnabled = true
             dragButton.isEnabled = appRegistered
             dragButton.text = if (dragMode) "Dragging" else "Drag"
@@ -659,6 +680,7 @@ class MainActivity : Activity() {
         releaseAllMouseButtons(reason)
         pendingAutoReconnectAddress = null
         clearPendingConnection()
+        clearPendingHostSwitch()
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
         dragMode = false
         doubleTapDragActive = false
@@ -892,13 +914,40 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun clearPendingHostSwitch(address: String? = null) {
+        if (address == null || pendingHostSwitchAddress == address) {
+            pendingHostSwitchAddress = null
+            pendingHostSwitchReason = null
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun connectionTimeoutMessage(reason: String, host: BluetoothDevice): String {
         val actionLabel = when (reason) {
             "new_pairing" -> "새 PC 연결"
             else -> "호스트 연결/전환"
         }
-        return "$actionLabel 응답이 없습니다: ${host.safeLabel()}. Windows Bluetooth에서 PhonePad 장치를 삭제한 뒤 새 PC 연결로 다시 페어링하세요."
+        return "$actionLabel 응답이 없습니다: ${host.safeLabel()}. Windows에서만 삭제했다면 Android 페어링 삭제로 휴대폰 쪽 bond도 지운 뒤 새 PC 연결을 다시 시도하세요."
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun attemptPendingHostSwitch() {
+        val address = pendingHostSwitchAddress ?: return
+        val reason = pendingHostSwitchReason ?: "manual_switch"
+        clearPendingHostSwitch(address)
+        if (!hasNearbyDevicePermissions() || !appRegistered || hidDevice == null) return
+        refreshBondedHosts(showStatus = false)
+        val host = bondedHosts.firstOrNull { it.address == address }
+            ?: bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == address }
+            ?: run {
+                setStatus("전환 대상 PC를 찾지 못했습니다. 목록 새로고침 또는 새 PC 연결을 다시 시도하세요.")
+                refreshControls()
+                return
+            }
+        mainHandler.postDelayed({
+            logHostDiagnostic("connect_after_switch_$reason", host)
+            connectHost(host, reason)
+        }, HOST_SWITCH_CONNECT_DELAY_MS)
     }
 
     @SuppressLint("MissingPermission")
@@ -914,11 +963,29 @@ class MainActivity : Activity() {
             return true
         }
         if (current != null && current.address != host.address) {
+            pendingHostSwitchAddress = host.address
+            pendingHostSwitchReason = reason
+            pendingAutoReconnectAddress = null
+            clearPendingConnection()
+            timedOutConnectionAddress = null
+            mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             releaseAllMouseButtons("host_switch")
-            hid.disconnect(current)
+            logHostDiagnostic("defer_switch_$reason", host)
+            val accepted = hid.disconnect(current)
+            connectionState = BluetoothProfile.STATE_DISCONNECTING
+            if (accepted) {
+                setStatus("현재 호스트 연결 해제 후 전환합니다: ${host.safeLabel()}")
+            } else {
+                clearPendingHostSwitch(host.address)
+                connectionState = BluetoothProfile.STATE_CONNECTED
+                setStatus("현재 호스트 연결 해제 요청이 거절됐습니다. 다시 시도하세요.")
+            }
+            refreshControls()
+            return accepted
         }
         pendingAutoReconnectAddress = if (reason == "auto_reconnect") host.address else null
         clearPendingConnection()
+        clearPendingHostSwitch(host.address)
         timedOutConnectionAddress = null
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
         logHostDiagnostic("connect_request_$reason", host)
@@ -962,12 +1029,52 @@ class MainActivity : Activity() {
         stopContinuousScroll()
         releaseAllMouseButtons("manual_disconnect")
         clearPendingConnection(host.address)
+        clearPendingHostSwitch(host.address)
         if (timedOutConnectionAddress == host.address) timedOutConnectionAddress = null
         val accepted = hidDevice?.disconnect(host) == true
         activeHost = null
         dragMode = false
         connectionState = BluetoothProfile.STATE_DISCONNECTED
         setStatus(if (accepted) "호스트 연결 해제를 요청했습니다." else "호스트 연결 해제 요청이 거절됐습니다.")
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun removeSelectedHostBond() {
+        if (!hasNearbyDevicePermissions()) {
+            requestNearbyDevicePermissions()
+            return
+        }
+        val host = selectedHost()
+        if (host == null) {
+            setStatus("삭제할 PC 후보가 없습니다.")
+            return
+        }
+        stopContinuousScroll()
+        if (connectedHost()?.address == host.address) {
+            releaseAllMouseButtons("remove_bond")
+            hidDevice?.disconnect(host)
+        }
+        pendingAutoReconnectAddress = null
+        clearPendingConnection(host.address)
+        clearPendingHostSwitch(host.address)
+        if (timedOutConnectionAddress == host.address) timedOutConnectionAddress = null
+        if (pendingNewPairingAddress == host.address) pendingNewPairingAddress = null
+        forgetHostRecord(host.address)
+        logHostDiagnostic("remove_bond_request", host)
+        val accepted = host.removeBondCompat()
+        if (accepted) {
+            if (activeHost?.address == host.address) activeHost = null
+            connectionState = BluetoothProfile.STATE_DISCONNECTED
+            setStatus("Android 페어링 삭제를 요청했습니다: ${host.safeLabel()}. Windows에서도 PhonePad를 삭제한 뒤 새 PC 연결로 다시 페어링하세요.")
+            mainHandler.postDelayed({
+                refreshBondedHosts(showStatus = false)
+                refreshControls()
+            }, BOND_REFRESH_DELAY_MS)
+        } else {
+            setStatus("Android 페어링 삭제 요청이 거절됐습니다. Android Bluetooth 설정에서 ${host.safeLabel()}를 삭제한 뒤 새 PC 연결을 다시 시도하세요.")
+        }
+        refreshBondedHosts(showStatus = false)
         refreshControls()
     }
 
@@ -1250,8 +1357,9 @@ class MainActivity : Activity() {
             appendLine("2. 기존 PC는 자동 재연결 대기")
             appendLine("3. 실패하면 전환 대상 선택 후 연결")
             appendLine("4. 새 PC는 새 PC 연결 누르기")
-            appendLine("5. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
-            append("6. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
+            appendLine("5. Windows만 삭제했다면 Android 페어링 삭제")
+            appendLine("6. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
+            append("7. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
     }
 
@@ -1333,6 +1441,20 @@ class MainActivity : Activity() {
             .apply()
     }
 
+    private fun forgetHostRecord(address: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val editor = prefs.edit()
+            .putStringSet(KEY_KNOWN_HOSTS, knownHostAddresses() - address)
+            .putStringSet(KEY_CANDIDATE_HOSTS, candidateHostAddresses() - address)
+        if (prefs.getString(KEY_LAST_HOST_ADDRESS, null) == address) {
+            editor
+                .remove(KEY_LAST_HOST_ADDRESS)
+                .remove(KEY_LAST_HOST_NAME)
+                .remove(KEY_LAST_HOST_CONNECTED_AT)
+        }
+        editor.apply()
+    }
+
     @SuppressLint("MissingPermission")
     private fun allBondedAddresses(): Set<String> {
         if (!hasNearbyDevicePermissions()) return emptySet()
@@ -1394,6 +1516,14 @@ class MainActivity : Activity() {
         } else {
             address
         }
+    }
+
+    private fun BluetoothDevice.removeBondCompat(): Boolean {
+        return runCatching {
+            javaClass.getMethod("removeBond").invoke(this) as? Boolean == true
+        }.onFailure {
+            Log.w(LOG_TAG, "remove bond failed address=$address", it)
+        }.getOrDefault(false)
     }
 
     private fun Int.toConnectionLabel(): String {
@@ -1534,6 +1664,8 @@ class MainActivity : Activity() {
         private const val SESSION_STOP_GRACE_MS = 1200L
         private const val EXTERNAL_FLOW_STOP_GRACE_MS = 30000L
         private const val NEW_PAIRING_SCAN_DELAY_MS = 900L
+        private const val HOST_SWITCH_CONNECT_DELAY_MS = 300L
+        private const val BOND_REFRESH_DELAY_MS = 900L
         private const val AUTO_RECONNECT_TIMEOUT_MS = 4500L
         private const val CONNECTION_TIMEOUT_MS = 12000L
         private const val MAX_DEVICE_ALIAS_LENGTH = 32

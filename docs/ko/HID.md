@@ -23,8 +23,10 @@ v1.0의 핵심 가정은 Android `BluetoothHidDevice`입니다. Phase 0에서는
 - PC에 표시되는 Bluetooth 이름은 `PhonePad - {기기명}` 형식을 사용합니다.
 - 호스트 선택은 임의의 주변 기기를 숨기고, 페어링된 컴퓨터형 기기와 과거 연결 성공 이력이 있는 PC만 보여줍니다.
 - 새 PC 연결 흐름 뒤 새로 감지된 bonded host는 현재 전환 대상으로 선택하고, 별도 수동 연결 탭 없이 연결을 시도합니다.
+- 호스트 전환은 순차 처리합니다. 현재 HID 호스트 연결 해제 콜백을 받은 뒤 전환 대상 연결을 시작합니다.
 - Windows 연결 실패는 HID callback 상태, bond 상태, Bluetooth class, selected/known/candidate 플래그, `connect(host)` 수락 여부를 로그에 남겨야 합니다.
 - 수동 전환과 새 PC 연결 시도는 HID connected 콜백이 오지 않으면 timeout 처리하고, 연결 중 상태에 머무르지 않도록 Windows 재페어링 안내를 표시합니다.
+- Windows에서만 장치를 삭제한 경우 새 PC 흐름을 다시 실행하기 전에 앱에서 선택된 호스트의 Android 페어링을 삭제할 수 있습니다.
 
 ## Android 빌드 기준선
 

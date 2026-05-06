@@ -23,8 +23,10 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - PC-visible Bluetooth name uses `PhonePad - {device name}`.
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
 - Newly bonded hosts discovered after the new-PC flow are selected as the current switch target and connection is attempted without requiring another manual connect tap.
+- Host switching is serialized: disconnect the current HID host first, then connect the switch target after the disconnect callback.
 - Windows connection failures must log HID callback state, bond state, Bluetooth class, selected/known/candidate flags, and `connect(host)` acceptance.
 - Manual and new-PC connection attempts time out if the HID connected callback does not arrive, then show Windows re-pairing guidance instead of staying in connecting state.
+- If Windows was removed only on the PC side, the selected host can be removed from Android pairing in-app before running the new-PC flow again.
 
 ## Android Build Baseline
 
