@@ -20,10 +20,11 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - Main UX auto-registers the HID session when the app enters foreground and unregisters when the app leaves.
 - App foreground entry never opens the Android discoverable prompt by itself; only the new-PC action does.
 - The app quietly attempts automatic reconnect to the last successful host after HID registration.
-- The new-PC action queues discoverable mode until the HID app registration callback has completed, matching the Windows pairing timing that worked in `0.1.6`.
-- PC-visible Bluetooth name uses `PhonePad - {device name}`.
+- The new-PC action queues discoverable mode until the HID app registration callback has completed, matching the Windows pairing timing that worked in `0.1.5`.
+- PC-visible Bluetooth name uses the stable `PhonePad` name from the Windows-verified `0.1.5` flow.
+- During the new-PC discoverable flow, HID registration remains alive for the full discoverable window so Windows can bind the mouse profile instead of generic phone/audio profiles.
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
-- Newly bonded hosts discovered after the new-PC flow are selected as the current switch target, but Windows compatibility keeps the final HID `connect()` on the manual `호스트 연결/전환` action like `0.1.6`.
+- Newly bonded hosts discovered after the new-PC flow are selected as the current switch target, but Windows compatibility keeps the final HID `connect()` on the manual `호스트 연결/전환` action like `0.1.5`.
 - Host switching is serialized: disconnect the current HID host first, then connect the switch target after the disconnect callback.
 - Windows connection failures must log HID callback state, bond state, Bluetooth class, selected/known/candidate flags, and `connect(host)` acceptance.
 - Manual and new-PC connection attempts time out if the HID connected callback does not arrive, then show Windows re-pairing guidance instead of staying in connecting state.

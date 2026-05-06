@@ -635,7 +635,6 @@ class MainActivity : Activity() {
             setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켜면 HID 세션이 자동으로 준비됩니다.")
             return
         }
-        setAdvertisedBluetoothName()
         if (hidDevice == null) {
             openHidProfile()
             return
@@ -682,7 +681,7 @@ class MainActivity : Activity() {
             return
         }
         val sdp = BluetoothHidDeviceAppSdpSettings(
-            advertisedDeviceName(),
+            ADVERTISED_DEVICE_NAME,
             "Bluetooth HID mouse for PhonePad",
             "PhonePad",
             BluetoothHidDevice.SUBCLASS1_MOUSE,
@@ -806,7 +805,7 @@ class MainActivity : Activity() {
         autoReconnectAttempted = true
         pendingAutoReconnectAddress = null
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
-        setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 0.1.6 방식처럼 호스트 연결/전환을 눌러 연결하세요.")
+        setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 0.1.5 방식처럼 호스트 연결/전환을 눌러 연결하세요.")
 
         if (!appRegistered || hidDevice == null) startInputSession()
         refreshControls()
@@ -852,17 +851,7 @@ class MainActivity : Activity() {
 
     @SuppressLint("MissingPermission")
     private fun advertisedDeviceName(): String {
-        val currentName = if (hasNearbyDevicePermissions()) bluetoothAdapter?.name?.trim().orEmpty() else ""
-        val alias = currentName
-            .takeIf { it.isNotBlank() }
-            ?.takeUnless { it == ADVERTISED_DEVICE_PREFIX || it.startsWith("$ADVERTISED_DEVICE_PREFIX -") }
-            ?: deviceModelAlias()
-        return "$ADVERTISED_DEVICE_PREFIX - ${alias.take(MAX_DEVICE_ALIAS_LENGTH)}"
-    }
-
-    private fun deviceModelAlias(): String {
-        val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.titlecase(Locale.US) }
-        return "$manufacturer ${Build.MODEL}".trim().ifBlank { "Android" }
+        return ADVERTISED_DEVICE_NAME
     }
 
     @SuppressLint("MissingPermission")
@@ -1677,13 +1666,12 @@ class MainActivity : Activity() {
         private const val DOUBLE_TAP_DRAG_TIMEOUT_MS = 320L
         private const val DOUBLE_TAP_DRAG_SLOP_DP = 18
         private const val SESSION_STOP_GRACE_MS = 1200L
-        private const val EXTERNAL_FLOW_STOP_GRACE_MS = 30000L
+        private const val EXTERNAL_FLOW_STOP_GRACE_MS = 330000L
         private const val NEW_PAIRING_SCAN_DELAY_MS = 900L
         private const val HOST_SWITCH_CONNECT_DELAY_MS = 300L
         private const val BOND_REFRESH_DELAY_MS = 900L
         private const val AUTO_RECONNECT_TIMEOUT_MS = 4500L
         private const val CONNECTION_TIMEOUT_MS = 12000L
-        private const val MAX_DEVICE_ALIAS_LENGTH = 32
         private const val PREFS_NAME = "phonepad"
         private const val KEY_KNOWN_HOSTS = "known_hosts"
         private const val KEY_CANDIDATE_HOSTS = "candidate_hosts"
@@ -1693,7 +1681,7 @@ class MainActivity : Activity() {
         private const val KEY_DOUBLE_TAP_DRAG_ENABLED = "double_tap_drag_enabled"
         private const val KEY_SCROLL_SPEED_PRESET = "scroll_speed_preset"
         private const val LOG_TAG = "PhonePad"
-        private const val ADVERTISED_DEVICE_PREFIX = "PhonePad"
+        private const val ADVERTISED_DEVICE_NAME = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)
