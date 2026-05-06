@@ -24,6 +24,7 @@ The v1.0 bet is Android `BluetoothHidDevice`. Phase 0 must verify that real Andr
 - Host selection hides arbitrary nearby devices; it shows paired computer-like devices and previously successful PC hosts.
 - Newly bonded hosts discovered after the new-PC flow are selected as the current switch target and connection is attempted without requiring another manual connect tap.
 - Windows connection failures must log HID callback state, bond state, Bluetooth class, selected/known/candidate flags, and `connect(host)` acceptance.
+- Manual and new-PC connection attempts time out if the HID connected callback does not arrive, then show Windows re-pairing guidance instead of staying in connecting state.
 
 ## Android Build Baseline
 

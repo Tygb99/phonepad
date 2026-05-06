@@ -71,7 +71,7 @@ Pass criteria:
 - Multi-pairing: previous/next changes only the switch target; actual switching requires `호스트 연결/전환`.
 - Double-tap drag: verify default OFF, option persistence, tap-tap-hold movement, and all-buttons-up on finger-up/cancel.
 - Scroll speed: verify slow/default/fast presets and confirm the default still avoids macOS hold-scroll over-acceleration.
-- Windows failure logging: when Windows reaches connecting then disconnected, capture `PhonePad` logcat `host_diag` and `connect_request_*` lines.
+- Windows failure logging: when Windows stays connecting or disconnects, capture `PhonePad` logcat `host_diag`, `connect_request_*`, and `connect_timeout_*` lines.
 
 ## Release Gate Checklist
 
