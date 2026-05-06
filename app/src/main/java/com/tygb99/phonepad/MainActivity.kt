@@ -681,7 +681,7 @@ class MainActivity : Activity() {
             return
         }
         val sdp = BluetoothHidDeviceAppSdpSettings(
-            ADVERTISED_DEVICE_NAME,
+            advertisedDeviceName(),
             "Bluetooth HID mouse for PhonePad",
             "PhonePad",
             BluetoothHidDevice.SUBCLASS1_MOUSE,
@@ -851,7 +851,17 @@ class MainActivity : Activity() {
 
     @SuppressLint("MissingPermission")
     private fun advertisedDeviceName(): String {
-        return ADVERTISED_DEVICE_NAME
+        val currentName = if (hasNearbyDevicePermissions()) bluetoothAdapter?.name?.trim().orEmpty() else ""
+        val alias = currentName
+            .takeIf { it.isNotBlank() }
+            ?.takeUnless { it == ADVERTISED_DEVICE_PREFIX || it.startsWith("$ADVERTISED_DEVICE_PREFIX -") }
+            ?: deviceModelAlias()
+        return "$ADVERTISED_DEVICE_PREFIX - ${alias.take(MAX_DEVICE_ALIAS_LENGTH)}"
+    }
+
+    private fun deviceModelAlias(): String {
+        val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.titlecase(Locale.US) }
+        return "$manufacturer ${Build.MODEL}".trim().ifBlank { "Android" }
     }
 
     @SuppressLint("MissingPermission")
@@ -1672,6 +1682,7 @@ class MainActivity : Activity() {
         private const val BOND_REFRESH_DELAY_MS = 900L
         private const val AUTO_RECONNECT_TIMEOUT_MS = 4500L
         private const val CONNECTION_TIMEOUT_MS = 12000L
+        private const val MAX_DEVICE_ALIAS_LENGTH = 32
         private const val PREFS_NAME = "phonepad"
         private const val KEY_KNOWN_HOSTS = "known_hosts"
         private const val KEY_CANDIDATE_HOSTS = "candidate_hosts"
@@ -1681,7 +1692,7 @@ class MainActivity : Activity() {
         private const val KEY_DOUBLE_TAP_DRAG_ENABLED = "double_tap_drag_enabled"
         private const val KEY_SCROLL_SPEED_PRESET = "scroll_speed_preset"
         private const val LOG_TAG = "PhonePad"
-        private const val ADVERTISED_DEVICE_NAME = "PhonePad"
+        private const val ADVERTISED_DEVICE_PREFIX = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)
