@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>PhonePad — Monogram (cursor inside the bowl of "p")</title>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="180" ry="180" fill="#1E2A78"/>
+
+  <!--
+    Lowercase "p":
+      - Bowl: circle at upper right of stem
+      - Stem: vertical descender on the left
+    The cursor is contained INSIDE the bowl, as if the trackpad
+    surface is enclosed within the letterform.
+  -->
+
+  <!-- Bowl of the "p" -->
+  <circle cx="592" cy="432" r="180"
+          fill="none" stroke="#00E0FF" stroke-width="64"/>
+
+  <!-- Stem of the "p" (proper descender) -->
+  <path d="M 412,252 L 412,820"
+        stroke="#00E0FF" stroke-width="64" fill="none"/>
+
+  <!-- Cursor centered inside the bowl -->
+  <g transform="translate(548, 358) scale(7)">
+    <path d="M 0,0 L 0,18 L 5,14 L 8,21 L 11,20 L 8,13 L 14,13 Z"
+          fill="#FFFFFF"
+          stroke="#1E2A78"
+          stroke-width="1"
+          stroke-linejoin="round"/>
+  </g>
+</svg>
