@@ -10,7 +10,7 @@ PhonePad is free and open source under the GNU General Public License v3.0 or la
 You can build it yourself or download APKs from GitHub Releases. A paid Play Store version may be offered later as a convenience build with automatic updates; purchasing it supports continued development.
 
 PhonePad does not use ads, accounts, analytics, tracking SDKs, or internet permission.
-Sponsor links are prepared through GitHub Sponsors: [github.com/sponsors/Tygb99](https://github.com/sponsors/Tygb99).
+Sponsor links are planned through GitHub Sponsors: [github.com/sponsors/Tygb99](https://github.com/sponsors/Tygb99).
 
 ## Product Scope
 
