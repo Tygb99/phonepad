@@ -27,6 +27,8 @@ The product is Android-first. A native Kotlin Phase 0 debug APK exists for real-
 | Release APK | GitHub Releases distribution. |
 | AAB | Play Store v1.1+ if store launch proceeds. |
 
+GitHub Actions now builds the debug APK on push, pull request, and manual dispatch. Tagged `v*` builds attach the debug-labeled APK and checksum to GitHub Releases.
+
 Current debug APK path:
 
 ```text

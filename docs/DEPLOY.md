@@ -27,6 +27,14 @@ GitHub Releases is the first target. Play Store is a later target after compatib
 - Drag Mode release test results are summarized.
 - SHA256 checksum is attached or documented.
 
+## GitHub Actions APK Flow
+
+- Pushes and pull requests run `:app:assembleDebug` and `:app:lintDebug`.
+- CI verifies that neither source manifests nor the built APK declare `INTERNET`.
+- Each successful run uploads a debug-labeled APK artifact plus `SHA256SUMS.txt`.
+- Pushing a `v*` tag creates or updates a GitHub Release and attaches the APK and checksum.
+- Current Phase 0 artifacts are debug APKs for compatibility testing, not Play Store signed builds.
+
 ## Play Store v1.1 Checklist
 
 - Privacy policy states no account, no ads, no analytics, no internet permission.

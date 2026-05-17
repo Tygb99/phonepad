@@ -1,0 +1,95 @@
+name: Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and lint
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug :app:lintDebug --stacktrace
+
+      - name: Verify no INTERNET permission
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+
+          if grep -R -n --include='*.xml' 'android.permission.INTERNET' app/src; then
+            echo "INTERNET permission found in source manifest resources."
+            exit 1
+          fi
+
+          AAPT_PATH="$(find "$ANDROID_HOME/build-tools" -path '*/aapt' | sort -V | tail -n 1)"
+          if "$AAPT_PATH" dump permissions "$APK_PATH" | grep -q 'android.permission.INTERNET'; then
+            echo "INTERNET permission found in built APK."
+            exit 1
+          fi
+
+      - name: Prepare APK artifact
+        run: |
+          VERSION_NAME="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
+          SAFE_REF="${GITHUB_REF_NAME//\//-}"
+          ARTIFACT_DIR="build/artifacts"
+          APK_NAME="phonepad-${VERSION_NAME}-${SAFE_REF}-debug.apk"
+
+          mkdir -p "$ARTIFACT_DIR"
+          cp app/build/outputs/apk/debug/app-debug.apk "$ARTIFACT_DIR/$APK_NAME"
+          sha256sum "$ARTIFACT_DIR/$APK_NAME" > "$ARTIFACT_DIR/SHA256SUMS.txt"
+          cat "$ARTIFACT_DIR/SHA256SUMS.txt"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonepad-debug-apk
+          path: |
+            build/artifacts/*.apk
+            build/artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" build/artifacts/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" build/artifacts/* \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Automated PhonePad Phase 0 debug APK build. This APK is debug-labeled and intended for compatibility testing."
+          fi

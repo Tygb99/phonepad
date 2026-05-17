@@ -27,6 +27,14 @@
 - Drag Mode 해제 테스트 결과가 요약됩니다.
 - SHA256 checksum이 첨부되거나 문서화됩니다.
 
+## GitHub Actions APK 흐름
+
+- push와 pull request에서 `:app:assembleDebug`와 `:app:lintDebug`를 실행합니다.
+- CI는 source manifest와 빌드된 APK 모두에 `INTERNET` 선언이 없는지 확인합니다.
+- 성공한 실행마다 debug 라벨 APK artifact와 `SHA256SUMS.txt`를 업로드합니다.
+- `v*` 태그를 push하면 GitHub Release를 만들거나 갱신하고 APK와 checksum을 첨부합니다.
+- 현재 Phase 0 산출물은 호환성 테스트용 debug APK이며 Play Store 서명 빌드가 아닙니다.
+
 ## Play Store v1.1 체크리스트
 
 - 개인정보처리방침은 계정 없음, 광고 없음, 분석 없음, 인터넷 권한 없음을 명시합니다.
