@@ -31,6 +31,7 @@ PhonePad is in a documentation and Phase 0 spike stage. The docs are organized s
 | [MOBILE_APP.md](MOBILE_APP.md) | You are changing Android build, permissions, services, or store release. |
 | [SECURITY.md](SECURITY.md) | You are adding permissions, logging, telemetry, or data handling. |
 | [TEST.md](TEST.md) | You are verifying compatibility, drag, reconnection, or release gates. |
+| [PHASE0_TEST_REPORT_2026-05-27.md](PHASE0_TEST_REPORT_2026-05-27.md) | You need the latest recorded ADB Phase 0 verification evidence. |
 | [ROADMAP.md](ROADMAP.md) | You need phase order and scope boundaries. |
 | [DEPLOY.md](DEPLOY.md) | You are preparing GitHub Releases or Play Store. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | You are collaborating through GitHub issues, PRs, or spikes. |
