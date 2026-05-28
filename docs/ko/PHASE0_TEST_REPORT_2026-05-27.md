@@ -21,7 +21,6 @@
 | 저장소 커밋 | `c253b11` (`c253b119e1eb1c8dd17f58d2593566a293bd2a4b`) |
 | 페어링된 호스트 표시명 | `yong의 Mac mini` |
 | ADB transport | device serial redacteddevice serial redacted`device serial redacted` |
-| ADB 참고 | stale wireless mDNS로 인한 adb daemon crash를 피하려고 `ADB_MDNS_AUTO_CONNECT=`를 사용했습니다. |
 
 ## 범위
 
