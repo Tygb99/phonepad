@@ -1420,11 +1420,19 @@ class MainActivity : Activity() {
         val ok = sendKeyboardStroke(stroke, "language_toggle preset=${preset.storageValue}")
         if (ok) {
             trackpadSurface.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            setStatus("${preset.shortLabel} 한영 전환 키를 보냈습니다.")
+            setStatus(languageToggleSentStatus(preset))
         } else {
             setStatus("한영 전환 키 전송에 실패했습니다. 호스트 연결을 확인하세요.")
         }
         refreshControls()
+    }
+
+    private fun languageToggleSentStatus(preset: HostOsPreset): String {
+        return if (preset == HostOsPreset.MAC) {
+            "Mac 한영 전환 키를 보냈습니다. 반응이 없으면 Mac Bluetooth에서 PhonePad를 삭제한 뒤 새 PC 연결로 다시 페어링하세요."
+        } else {
+            "${preset.shortLabel} 한영 전환 키를 보냈습니다."
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -1433,10 +1441,46 @@ class MainActivity : Activity() {
         val device = connectedHost()
         val hid = hidDevice
         if (hid == null || device == null || !appRegistered) return recordReport(false, "호스트 없음")
+        val needsModifierLead = stroke.modifier != 0 && stroke.keyUsage != 0
+        val ok = sendKeyboardReport(
+            device,
+            hid,
+            stroke.modifier,
+            if (needsModifierLead) 0 else stroke.keyUsage,
+            if (needsModifierLead) "$summary modifier_down" else summary,
+        )
+        if (ok) {
+            if (needsModifierLead) {
+                mainHandler.postDelayed({
+                    val chordOk = sendKeyboardReport(device, hid, stroke.modifier, stroke.keyUsage, "$summary key_down")
+                    if (chordOk) {
+                        mainHandler.postDelayed({ releaseAllKeyboardKeys("keyboard_key_up") }, KEY_RELEASE_DELAY_MS)
+                    } else {
+                        releaseAllKeyboardKeys("keyboard_key_down_failed")
+                    }
+                }, KEY_CHORD_STAGE_DELAY_MS)
+            } else {
+                mainHandler.postDelayed({ releaseAllKeyboardKeys("keyboard_key_up") }, KEY_RELEASE_DELAY_MS)
+            }
+        }
+        return ok
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun sendKeyboardReport(
+        device: BluetoothDevice,
+        hid: BluetoothHidDevice,
+        modifier: Int,
+        keyUsage: Int,
+        summary: String,
+    ): Boolean {
+        if (!hasNearbyDevicePermissions() || !appRegistered || connectedHost()?.address != device.address) {
+            return recordReport(false, "호스트 없음")
+        }
         val payload = byteArrayOf(
-            stroke.modifier.coerceIn(0, 255).toByte(),
+            modifier.coerceIn(0, 255).toByte(),
             0,
-            stroke.keyUsage.coerceIn(0, 255).toByte(),
+            keyUsage.coerceIn(0, 255).toByte(),
             0,
             0,
             0,
@@ -1444,13 +1488,9 @@ class MainActivity : Activity() {
             0,
         )
         val ok = hid.sendReport(device, KEYBOARD_REPORT_ID, payload)
-        val reportSummary = "$summary modifier=${stroke.modifier} key=${stroke.keyUsage}"
+        val reportSummary = "$summary modifier=$modifier key=$keyUsage"
         if (!ok) Log.w(LOG_TAG, "send keyboard report failed host=${device.address} $reportSummary")
-        val recorded = recordReport(ok, reportSummary)
-        if (ok) {
-            mainHandler.postDelayed({ releaseAllKeyboardKeys("keyboard_key_up") }, KEY_RELEASE_DELAY_MS)
-        }
-        return recorded
+        return recordReport(ok, reportSummary)
     }
 
     private fun toggleDragMode() {
@@ -1664,7 +1704,8 @@ class MainActivity : Activity() {
             appendLine("5. Windows만 삭제했다면 Android 페어링 삭제")
             appendLine("6. PC Bluetooth에서 ${advertisedDeviceName()} 검색")
             appendLine("7. 페어링 후 호스트 연결/전환 누르기")
-            append("8. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
+            appendLine("8. 한영이 반응 없으면 PC Bluetooth에서 PhonePad 삭제 후 다시 페어링")
+            append("9. 오른쪽 터치패드 사용 · 스크롤 버튼 길게 누르기")
         }
     }
 
@@ -1981,6 +2022,7 @@ class MainActivity : Activity() {
         private const val POINTER_SCALE = 1.55f
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
+        private const val KEY_CHORD_STAGE_DELAY_MS = 30L
         private const val KEY_RELEASE_DELAY_MS = 45L
         private const val SCROLL_UP = 1
         private const val SCROLL_DOWN = -1
