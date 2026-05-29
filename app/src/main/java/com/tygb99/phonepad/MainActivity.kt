@@ -28,6 +28,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -45,13 +47,24 @@ class MainActivity : Activity() {
     private lateinit var hostText: TextView
     private lateinit var reportText: TextView
     private lateinit var trackpadHintText: TextView
+    private lateinit var connectionStatusChip: TextView
     private lateinit var dragButton: Button
+    private lateinit var connectionDrawer: FrameLayout
+    private lateinit var connectionDrawerButton: Button
+    private lateinit var languageToggleButton: Button
+    private lateinit var compactHostOsButton: Button
+    private lateinit var hostOsButton: Button
     private lateinit var discoverableButton: Button
     private lateinit var previousHostButton: Button
     private lateinit var nextHostButton: Button
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
     private lateinit var removeBondButton: Button
+    private lateinit var guideToggleButton: Button
+    private lateinit var guideBox: TextView
+    private lateinit var debugToggleButton: Button
+    private lateinit var advancedToggleButton: Button
+    private lateinit var advancedControls: LinearLayout
     private lateinit var trackpadSurface: FrameLayout
     private lateinit var doubleTapDragButton: Button
     private lateinit var scrollSpeedButton: Button
@@ -80,6 +93,10 @@ class MainActivity : Activity() {
     private var previousBluetoothName: String? = null
     private var activeScrollButton: Button? = null
     private var activeScrollWheel = 0
+    private var guideExpanded = false
+    private var debugExpanded = false
+    private var advancedExpanded = false
+    private var drawerBackCallbackRegistered = false
     private var autoSessionActive = false
     private var externalBluetoothFlowActive = false
     private var autoReconnectAttempted = false
@@ -95,6 +112,7 @@ class MainActivity : Activity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
+    private val drawerBackCallback = OnBackInvokedCallback { hideConnectionPanel() }
 
     private val scrollRepeatRunnable = object : Runnable {
         override fun run() {
@@ -178,6 +196,7 @@ class MainActivity : Activity() {
             if (profile != BluetoothProfile.HID_DEVICE) return
             stopContinuousScroll()
             releaseAllMouseButtons("hid_profile_disconnected")
+            releaseAllKeyboardKeys("hid_profile_disconnected")
             pendingAutoReconnectAddress = null
             pendingDiscoverableRequest = false
             clearPendingConnection()
@@ -240,6 +259,7 @@ class MainActivity : Activity() {
                 BluetoothProfile.STATE_DISCONNECTING -> {
                     stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnecting")
+                    releaseAllKeyboardKeys("host_disconnecting")
                     if (
                         timedOutConnectionAddress != device?.address &&
                         pendingConnectionAddress == null &&
@@ -251,6 +271,7 @@ class MainActivity : Activity() {
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnected")
+                    releaseAllKeyboardKeys("host_disconnected")
                     if (doubleTapDragActive) doubleTapDragActive = false
                     val wasAutoReconnect = pendingAutoReconnectAddress == device?.address
                     val wasPendingConnection = pendingConnectionAddress == device?.address
@@ -282,6 +303,7 @@ class MainActivity : Activity() {
         override fun onVirtualCableUnplug(device: BluetoothDevice?) {
             stopContinuousScroll()
             releaseAllMouseButtons("virtual_cable_unplug")
+            releaseAllKeyboardKeys("virtual_cable_unplug")
             if (pendingAutoReconnectAddress == device?.address) {
                 pendingAutoReconnectAddress = null
                 mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
@@ -350,8 +372,18 @@ class MainActivity : Activity() {
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
         mainHandler.removeCallbacks(sessionCleanupRunnable)
+        unregisterDrawerBackCallback()
         stopInputSession("activity_destroyed", closeProfile = true)
         super.onDestroy()
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onBackPressed() {
+        if (::connectionDrawer.isInitialized && connectionDrawer.visibility == View.VISIBLE) {
+            hideConnectionPanel()
+            return
+        }
+        super.onBackPressed()
     }
 
     override fun onRequestPermissionsResult(
@@ -374,8 +406,7 @@ class MainActivity : Activity() {
     }
 
     private fun buildContentView(): View {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        val root = FrameLayout(this).apply {
             setBackgroundColor(COLOR_BACKGROUND)
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
@@ -390,18 +421,34 @@ class MainActivity : Activity() {
             insets
         }
 
-        val connectionPanel = buildConnectionPanel()
-        root.addView(
-            connectionPanel,
-            LinearLayout.LayoutParams(dp(370), ViewGroup.LayoutParams.MATCH_PARENT).apply {
-                rightMargin = dp(14)
-            },
-        )
-
         val touchpadPanel = buildTouchpadPanel()
         root.addView(
             touchpadPanel,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f),
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+
+        connectionDrawer = FrameLayout(this).apply {
+            visibility = View.GONE
+            isClickable = true
+            setBackgroundColor(COLOR_DRAWER_SCRIM)
+            setOnClickListener { hideConnectionPanel() }
+        }
+        val connectionPanel = buildConnectionPanel().apply {
+            setOnClickListener { }
+        }
+        connectionDrawer.addView(
+            connectionPanel,
+            FrameLayout.LayoutParams(dp(430), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START),
+        )
+        root.addView(
+            connectionDrawer,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
         )
 
         return root
@@ -413,13 +460,21 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
 
-        val title = TextView(this).apply {
-            text = getString(R.string.app_name)
-            textSize = 24f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        column.addView(title, matchWrap())
+        titleRow.addView(
+            TextView(this).apply {
+                text = getString(R.string.app_name)
+                textSize = 24f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        titleRow.addView(actionButton("닫기") { hideConnectionPanel() }, fixedButtonParams(92))
+        column.addView(titleRow, matchWrap())
 
         deviceText = TextView(this).apply {
             textSize = 13f
@@ -433,47 +488,64 @@ class MainActivity : Activity() {
         statusText = infoBox()
         column.addView(statusText, matchWrap(bottom = 10))
 
-        column.addView(sectionLabel("순서 가이드"), matchWrap(bottom = 6))
-        column.addView(
-            infoBox().apply { text = setupGuideText() },
-            matchWrap(bottom = 10),
-        )
-
-        column.addView(
-            buttonRow(
-                actionButton("권한", ::requestNearbyDevicePermissions),
-                actionButton("Bluetooth 설정", ::openBluetoothSettings),
-            ),
-            matchWrap(bottom = 8),
-        )
-
         discoverableButton = actionButton("새 PC 연결") { requestDiscoverable() }
-        column.addView(discoverableButton, matchWrap(bottom = 12))
+        column.addView(discoverableButton, matchWrap(bottom = 10))
 
         hostText = infoBox()
         column.addView(hostText, matchWrap(bottom = 8))
+
+        hostOsButton = actionButton("자동 추정", ::cycleHostOsPreset)
+        column.addView(hostOsButton, matchWrap(bottom = 8))
 
         previousHostButton = actionButton("이전", ::selectPreviousHost)
         nextHostButton = actionButton("다음", ::selectNextHost)
         column.addView(buttonRow(previousHostButton, nextHostButton), matchWrap(bottom = 8))
 
-        column.addView(
-            buttonRow(
-                actionButton("목록 새로고침") { refreshBondedHosts(showStatus = true) },
-                actionButton("페어링 설정", ::openBluetoothSettings),
-            ),
-            matchWrap(bottom = 8),
-        )
-
         connectButton = actionButton("호스트 연결/전환", ::connectSelectedHost)
         disconnectButton = actionButton("연결 해제", ::disconnectActiveHost)
         column.addView(buttonRow(connectButton, disconnectButton), matchWrap(bottom = 8))
 
-        removeBondButton = actionButton("Android 페어링 삭제", ::removeSelectedHostBond)
-        column.addView(removeBondButton, matchWrap(bottom = 12))
+        guideToggleButton = actionButton("순서 가이드 보기") {
+            guideExpanded = !guideExpanded
+            refreshControls()
+        }
+        column.addView(guideToggleButton, matchWrap(bottom = 8))
+        guideBox = infoBox().apply { text = setupGuideText() }
+        column.addView(guideBox, matchWrap(bottom = 8))
 
+        debugToggleButton = actionButton("전송 카운터 보기") {
+            debugExpanded = !debugExpanded
+            refreshControls()
+        }
+        column.addView(debugToggleButton, matchWrap(bottom = 8))
         reportText = infoBox()
-        column.addView(reportText, matchWrap())
+        column.addView(reportText, matchWrap(bottom = 8))
+
+        advancedToggleButton = actionButton("고급 연결 도구 보기") {
+            advancedExpanded = !advancedExpanded
+            refreshControls()
+        }
+        column.addView(advancedToggleButton, matchWrap(bottom = 8))
+        advancedControls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                buttonRow(
+                    actionButton("권한", ::requestNearbyDevicePermissions),
+                    actionButton("Bluetooth 설정", ::openBluetoothSettings),
+                ),
+                matchWrap(bottom = 8),
+            )
+            addView(
+                buttonRow(
+                    actionButton("목록 새로고침") { refreshBondedHosts(showStatus = true) },
+                    actionButton("페어링 설정", ::openBluetoothSettings),
+                ),
+                matchWrap(bottom = 8),
+            )
+            removeBondButton = actionButton("Android 페어링 삭제", ::removeSelectedHostBond)
+            addView(removeBondButton, matchWrap())
+        }
+        column.addView(advancedControls, matchWrap())
 
         return ScrollView(this).apply {
             background = rounded(COLOR_PANEL, dp(8), COLOR_STROKE)
@@ -494,24 +566,40 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        header.addView(
+        val titleColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        titleColumn.addView(
             TextView(this).apply {
                 text = "터치패드 모드"
                 textSize = 22f
                 setTextColor(Color.WHITE)
                 typeface = Typeface.DEFAULT_BOLD
             },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            matchWrap(bottom = 2),
         )
-        header.addView(
+        titleColumn.addView(
             TextView(this).apply {
                 text = "한 손가락 이동 · 두 손가락 스크롤 · 탭 클릭"
                 textSize = 13f
                 setTextColor(COLOR_MUTED)
-                gravity = Gravity.END
             },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            matchWrap(),
         )
+        header.addView(
+            titleColumn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                rightMargin = dp(8)
+            },
+        )
+        connectionStatusChip = statusChip()
+        header.addView(connectionStatusChip, fixedButtonParams(230))
+        compactHostOsButton = actionButton("자동", ::cycleHostOsPreset)
+        header.addView(compactHostOsButton, fixedButtonParams(112, left = 6))
+        languageToggleButton = actionButton("한영", ::sendLanguageToggle)
+        header.addView(languageToggleButton, fixedButtonParams(104, left = 6))
+        connectionDrawerButton = actionButton("연결", ::showConnectionPanel)
+        header.addView(connectionDrawerButton, fixedButtonParams(104, left = 6))
         panel.addView(header, matchWrap(bottom = 10))
 
         trackpadSurface = FrameLayout(this).apply {
@@ -591,12 +679,20 @@ class MainActivity : Activity() {
             val adapterEnabled = bluetoothAdapter?.isEnabled == true
             val host = connectedHost()
             val canUseBluetooth = hasPermissions && adapterEnabled
+            val settingsHost = hostForInputSettings()
+            val resolvedHostOs = resolvedHostOsPreset(settingsHost)
             discoverableButton.isEnabled = canUseBluetooth
             previousHostButton.isEnabled = bondedHosts.size > 1
             nextHostButton.isEnabled = bondedHosts.size > 1
             connectButton.isEnabled = canUseBluetooth && appRegistered && hidDevice != null && selectedHost() != null
             disconnectButton.isEnabled = canUseBluetooth && hidDevice != null && host != null
             removeBondButton.isEnabled = canUseBluetooth && selectedHost() != null
+            guideBox.visibility = if (guideExpanded) View.VISIBLE else View.GONE
+            reportText.visibility = if (debugExpanded) View.VISIBLE else View.GONE
+            advancedControls.visibility = if (advancedExpanded) View.VISIBLE else View.GONE
+            guideToggleButton.text = if (guideExpanded) "순서 가이드 숨기기" else "순서 가이드 보기"
+            debugToggleButton.text = if (debugExpanded) "전송 카운터 숨기기" else "전송 카운터 보기"
+            advancedToggleButton.text = if (advancedExpanded) "고급 연결 도구 숨기기" else "고급 연결 도구 보기"
             trackpadSurface.isEnabled = true
             dragButton.isEnabled = appRegistered
             dragButton.text = if (dragMode) "Dragging" else "Drag"
@@ -612,6 +708,24 @@ class MainActivity : Activity() {
                 if (doubleTapDragEnabled) COLOR_INPUT_STROKE else COLOR_BUTTON_STROKE,
             )
             scrollSpeedButton.text = String.format(Locale.US, "스크롤 %s", scrollSpeedLabel())
+            hostOsButton.isEnabled = settingsHost != null
+            hostOsButton.text = hostOsControlText(settingsHost)
+            compactHostOsButton.isEnabled = settingsHost != null
+            compactHostOsButton.text = resolvedHostOs.shortLabel
+            languageToggleButton.text = if (resolvedHostOs == HostOsPreset.AUTO) "한영 설정" else "한영"
+            languageToggleButton.isEnabled = canUseBluetooth && appRegistered && host != null
+            connectionDrawerButton.text = if (!hasPermissions || !adapterEnabled || host == null) "연결!" else "연결"
+            connectionDrawerButton.background = rounded(
+                if (!hasPermissions || !adapterEnabled || host == null) COLOR_INPUT_ACTIVE else COLOR_BUTTON,
+                dp(8),
+                if (!hasPermissions || !adapterEnabled || host == null) COLOR_INPUT_STROKE else COLOR_BUTTON_STROKE,
+            )
+            connectionStatusChip.text = connectionChipText(host, appRegistered, hasPermissions, adapterEnabled)
+            connectionStatusChip.background = rounded(
+                if (host != null) COLOR_INPUT_ACTIVE else COLOR_INFO,
+                dp(8),
+                if (host != null) COLOR_INPUT_STROKE else COLOR_STROKE,
+            )
             hostText.text = buildHostText(host)
             reportText.text = buildReportText()
             trackpadHintText.text = when {
@@ -682,10 +796,10 @@ class MainActivity : Activity() {
         }
         val sdp = BluetoothHidDeviceAppSdpSettings(
             advertisedDeviceName(),
-            "Bluetooth HID mouse for PhonePad",
+            "Bluetooth HID mouse and keyboard for PhonePad",
             "PhonePad",
-            BluetoothHidDevice.SUBCLASS1_MOUSE,
-            MOUSE_DESCRIPTOR,
+            BluetoothHidDevice.SUBCLASS1_COMBO,
+            MOUSE_KEYBOARD_DESCRIPTOR,
         )
         val accepted = device.registerApp(sdp, null, null, mainExecutor, hidCallback)
         setStatus(
@@ -699,6 +813,7 @@ class MainActivity : Activity() {
     private fun stopInputSession(reason: String, closeProfile: Boolean) {
         stopContinuousScroll()
         releaseAllMouseButtons(reason)
+        releaseAllKeyboardKeys(reason)
         pendingAutoReconnectAddress = null
         skipAutoReconnectOnce = false
         pendingDiscoverableRequest = false
@@ -984,6 +1099,7 @@ class MainActivity : Activity() {
             timedOutConnectionAddress = null
             mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             releaseAllMouseButtons("host_switch")
+            releaseAllKeyboardKeys("host_switch")
             logHostDiagnostic("defer_switch_$reason", host)
             val accepted = hid.disconnect(current)
             connectionState = BluetoothProfile.STATE_DISCONNECTING
@@ -1042,6 +1158,7 @@ class MainActivity : Activity() {
         }
         stopContinuousScroll()
         releaseAllMouseButtons("manual_disconnect")
+        releaseAllKeyboardKeys("manual_disconnect")
         clearPendingConnection(host.address)
         clearPendingHostSwitch(host.address)
         if (timedOutConnectionAddress == host.address) timedOutConnectionAddress = null
@@ -1067,6 +1184,7 @@ class MainActivity : Activity() {
         stopContinuousScroll()
         if (connectedHost()?.address == host.address) {
             releaseAllMouseButtons("remove_bond")
+            releaseAllKeyboardKeys("remove_bond")
             hidDevice?.disconnect(host)
         }
         pendingAutoReconnectAddress = null
@@ -1167,7 +1285,7 @@ class MainActivity : Activity() {
         val message = when {
             !hasNearbyDevicePermissions() -> "Bluetooth 권한이 필요합니다."
             !appRegistered -> "HID 세션을 자동 준비 중입니다."
-            host == null -> "호스트 연결이 없습니다. 왼쪽에서 페어링된 PC를 선택해 연결하세요."
+            host == null -> "호스트 연결이 없습니다. 연결 패널에서 페어링된 PC를 선택해 연결하세요."
             else -> null
         }
         if (message != null && showStatus) {
@@ -1175,6 +1293,132 @@ class MainActivity : Activity() {
             refreshControls()
         }
         return host
+    }
+
+    private fun showConnectionPanel() {
+        connectionDrawer.visibility = View.VISIBLE
+        registerDrawerBackCallback()
+    }
+
+    private fun hideConnectionPanel() {
+        connectionDrawer.visibility = View.GONE
+        unregisterDrawerBackCallback()
+    }
+
+    private fun registerDrawerBackCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || drawerBackCallbackRegistered) return
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            drawerBackCallback,
+        )
+        drawerBackCallbackRegistered = true
+    }
+
+    private fun unregisterDrawerBackCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || !drawerBackCallbackRegistered) return
+        onBackInvokedDispatcher.unregisterOnBackInvokedCallback(drawerBackCallback)
+        drawerBackCallbackRegistered = false
+    }
+
+    private fun connectionChipText(
+        host: BluetoothDevice?,
+        registered: Boolean,
+        hasPermissions: Boolean,
+        adapterEnabled: Boolean,
+    ): String {
+        return when {
+            !hasPermissions -> "권한 필요"
+            !adapterEnabled -> "Bluetooth 꺼짐"
+            host != null -> "연결됨: ${host.safeLabel()}"
+            registered -> "연결 대기"
+            else -> "HID 준비 중"
+        }
+    }
+
+    private fun hostForInputSettings(): BluetoothDevice? {
+        return connectedHost() ?: selectedHost() ?: activeHost
+    }
+
+    private fun savedHostOsPreset(host: BluetoothDevice?): HostOsPreset {
+        val address = host?.address ?: return HostOsPreset.AUTO
+        return HostOsPreset.fromStorageValue(
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(hostOsPresetKey(address), null),
+        )
+    }
+
+    private fun resolvedHostOsPreset(host: BluetoothDevice?): HostOsPreset {
+        return HostInputPolicy.resolvePreset(savedHostOsPreset(host), host.safeLabel())
+    }
+
+    private fun hostOsControlText(host: BluetoothDevice?): String {
+        val saved = savedHostOsPreset(host)
+        val resolved = resolvedHostOsPreset(host)
+        return if (saved == HostOsPreset.AUTO && resolved != HostOsPreset.AUTO) {
+            "호스트 OS: ${resolved.shortLabel} 자동"
+        } else {
+            "호스트 OS: ${saved.label}"
+        }
+    }
+
+    private fun cycleHostOsPreset() {
+        val host = hostForInputSettings()
+        if (host == null) {
+            setStatus("호스트 OS를 저장할 PC 후보가 없습니다. 먼저 호스트를 연결하거나 선택하세요.")
+            showConnectionPanel()
+            return
+        }
+        val next = savedHostOsPreset(host).nextManualPreset()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(hostOsPresetKey(host.address), next.storageValue)
+            .apply()
+        setStatus("${host.safeLabel()} 한영 전환 설정: ${next.label}")
+        refreshControls()
+    }
+
+    private fun sendLanguageToggle() {
+        val host = readyHostForInput(showStatus = true) ?: return
+        val preset = resolvedHostOsPreset(host)
+        val stroke = HostInputPolicy.languageToggleStroke(preset)
+        if (stroke == null) {
+            setStatus("호스트 OS를 먼저 선택하세요. Mac 또는 Windows 한영 전환 방식을 고를 수 있습니다.")
+            showConnectionPanel()
+            return
+        }
+        val ok = sendKeyboardStroke(stroke, "language_toggle preset=${preset.storageValue}")
+        if (ok) {
+            trackpadSurface.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            setStatus("${preset.shortLabel} 한영 전환 키를 보냈습니다.")
+        } else {
+            setStatus("한영 전환 키 전송에 실패했습니다. 호스트 연결을 확인하세요.")
+        }
+        refreshControls()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun sendKeyboardStroke(stroke: KeyboardStroke, summary: String): Boolean {
+        if (!hasNearbyDevicePermissions()) return recordReport(false, "권한 없음")
+        val device = connectedHost()
+        val hid = hidDevice
+        if (hid == null || device == null || !appRegistered) return recordReport(false, "호스트 없음")
+        val payload = byteArrayOf(
+            stroke.modifier.coerceIn(0, 255).toByte(),
+            0,
+            stroke.keyUsage.coerceIn(0, 255).toByte(),
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        val ok = hid.sendReport(device, KEYBOARD_REPORT_ID, payload)
+        val reportSummary = "$summary modifier=${stroke.modifier} key=${stroke.keyUsage}"
+        if (!ok) Log.w(LOG_TAG, "send keyboard report failed host=${device.address} $reportSummary")
+        val recorded = recordReport(ok, reportSummary)
+        if (ok) {
+            mainHandler.postDelayed({ releaseAllKeyboardKeys("keyboard_key_up") }, KEY_RELEASE_DELAY_MS)
+        }
+        return recorded
     }
 
     private fun toggleDragMode() {
@@ -1317,6 +1561,20 @@ class MainActivity : Activity() {
         return ok
     }
 
+    @SuppressLint("MissingPermission")
+    private fun releaseAllKeyboardKeys(reason: String): Boolean {
+        val device = connectedHost()
+        val hid = hidDevice ?: return false
+        if (!hasNearbyDevicePermissions() || device == null || !appRegistered) return false
+        val ok = hid.sendReport(device, KEYBOARD_REPORT_ID, byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0))
+        if (!ok) Log.w(LOG_TAG, "release keyboard keys failed host=${device.address} reason=$reason")
+        recordReport(ok, "release_keyboard reason=$reason")
+        if (!ok && reason != "activity_destroyed") {
+            setStatus("키보드 해제 보고서 전송에 실패했습니다: $reason")
+        }
+        return ok
+    }
+
     private fun recordReport(ok: Boolean, summary: String): Boolean {
         if (ok) sentReportCount++ else failedReportCount++
         lastReportSummary = summary
@@ -1350,6 +1608,7 @@ class MainActivity : Activity() {
         return buildString {
             appendLine("활성 호스트: ${host.safeLabel()}")
             appendLine("연결 상태: ${connectionState.toConnectionLabel()}")
+            appendLine("한영 전환: ${resolvedHostOsPreset(selected ?: host).label}")
             appendLine("최근 PC: ${lastSuccessfulHostName() ?: "없음"}")
             appendLine("전환 대상: ${selected.safeLabel()}")
             append("PC 후보 목록: ${bondedHosts.size}개")
@@ -1460,6 +1719,7 @@ class MainActivity : Activity() {
         val editor = prefs.edit()
             .putStringSet(KEY_KNOWN_HOSTS, knownHostAddresses() - address)
             .putStringSet(KEY_CANDIDATE_HOSTS, candidateHostAddresses() - address)
+            .remove(hostOsPresetKey(address))
         if (prefs.getString(KEY_LAST_HOST_ADDRESS, null) == address) {
             editor
                 .remove(KEY_LAST_HOST_ADDRESS)
@@ -1468,6 +1728,8 @@ class MainActivity : Activity() {
         }
         editor.apply()
     }
+
+    private fun hostOsPresetKey(address: String): String = "$KEY_HOST_OS_PRESET_PREFIX$address"
 
     @SuppressLint("MissingPermission")
     private fun allBondedAddresses(): Set<String> {
@@ -1575,6 +1837,17 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun statusChip(): TextView {
+        return TextView(this).apply {
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            maxLines = 2
+            setPadding(dp(10), 0, dp(10), 0)
+            background = rounded(COLOR_INFO, dp(8), COLOR_STROKE)
+        }
+    }
+
     private fun actionButton(text: String, onClick: () -> Unit): Button {
         return Button(this).apply {
             this.text = text
@@ -1658,16 +1931,24 @@ class MainActivity : Activity() {
         ).apply { bottomMargin = dp(bottom) }
     }
 
+    private fun fixedButtonParams(widthDp: Int, left: Int = 0): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(dp(widthDp), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            if (left > 0) leftMargin = dp(left)
+        }
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     companion object {
         private const val NEARBY_DEVICES_REQUEST = 4028
         private const val MOUSE_REPORT_ID = 1
+        private const val KEYBOARD_REPORT_ID = 2
         private const val LEFT_BUTTON = 1
         private const val RIGHT_BUTTON = 2
         private const val POINTER_SCALE = 1.55f
         private const val DISCOVERABLE_SECONDS = 300
         private const val CLICK_RELEASE_DELAY_MS = 35L
+        private const val KEY_RELEASE_DELAY_MS = 45L
         private const val SCROLL_UP = 1
         private const val SCROLL_DOWN = -1
         private const val SCROLL_SPEED_SLOW = 0
@@ -1691,10 +1972,12 @@ class MainActivity : Activity() {
         private const val KEY_LAST_HOST_CONNECTED_AT = "last_host_connected_at"
         private const val KEY_DOUBLE_TAP_DRAG_ENABLED = "double_tap_drag_enabled"
         private const val KEY_SCROLL_SPEED_PRESET = "scroll_speed_preset"
+        private const val KEY_HOST_OS_PRESET_PREFIX = "host_os_preset_"
         private const val LOG_TAG = "PhonePad"
         private const val ADVERTISED_DEVICE_PREFIX = "PhonePad"
 
         private val COLOR_BACKGROUND = Color.rgb(10, 12, 15)
+        private val COLOR_DRAWER_SCRIM = Color.argb(184, 0, 0, 0)
         private val COLOR_PANEL = Color.rgb(28, 32, 39)
         private val COLOR_PANEL_ALT = Color.rgb(23, 27, 34)
         private val COLOR_INFO = Color.rgb(35, 41, 50)
@@ -1712,7 +1995,7 @@ class MainActivity : Activity() {
         private val COLOR_INPUT_ACTIVE = Color.rgb(58, 106, 92)
         private val COLOR_INPUT_STROKE = Color.rgb(132, 207, 178)
 
-        private val MOUSE_DESCRIPTOR = intArrayOf(
+        private val MOUSE_KEYBOARD_DESCRIPTOR = intArrayOf(
             0x05, 0x01,
             0x09, 0x02,
             0xA1, 0x01,
@@ -1747,6 +2030,30 @@ class MainActivity : Activity() {
             0x95, 0x01,
             0x81, 0x06,
             0xC0,
+            0xC0,
+            0x05, 0x01,
+            0x09, 0x06,
+            0xA1, 0x01,
+            0x85, KEYBOARD_REPORT_ID,
+            0x05, 0x07,
+            0x19, 0xE0,
+            0x29, 0xE7,
+            0x15, 0x00,
+            0x25, 0x01,
+            0x75, 0x01,
+            0x95, 0x08,
+            0x81, 0x02,
+            0x95, 0x01,
+            0x75, 0x08,
+            0x81, 0x03,
+            0x95, 0x06,
+            0x75, 0x08,
+            0x15, 0x00,
+            0x26, 0xFF, 0x00,
+            0x05, 0x07,
+            0x19, 0x00,
+            0x2A, 0xFF, 0x00,
+            0x81, 0x00,
             0xC0,
         ).map { it.toByte() }.toByteArray()
     }
