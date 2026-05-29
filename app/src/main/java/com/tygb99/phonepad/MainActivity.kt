@@ -557,19 +557,15 @@ class MainActivity : Activity() {
     @SuppressLint("SetTextI18n")
     private fun buildTouchpadPanel(): View {
         val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
             background = rounded(COLOR_PANEL_ALT, dp(8), COLOR_STROKE)
         }
 
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val titleColumn = LinearLayout(this).apply {
+        val touchpadColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        titleColumn.addView(
+        touchpadColumn.addView(
             TextView(this).apply {
                 text = "터치패드 모드"
                 textSize = 22f
@@ -578,29 +574,14 @@ class MainActivity : Activity() {
             },
             matchWrap(bottom = 2),
         )
-        titleColumn.addView(
+        touchpadColumn.addView(
             TextView(this).apply {
                 text = "한 손가락 이동 · 두 손가락 스크롤 · 탭 클릭"
                 textSize = 13f
                 setTextColor(COLOR_MUTED)
             },
-            matchWrap(),
+            matchWrap(bottom = 10),
         )
-        header.addView(
-            titleColumn,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                rightMargin = dp(8)
-            },
-        )
-        connectionStatusChip = statusChip()
-        header.addView(connectionStatusChip, fixedButtonParams(230))
-        compactHostOsButton = actionButton("자동", ::cycleHostOsPreset)
-        header.addView(compactHostOsButton, fixedButtonParams(112, left = 6))
-        languageToggleButton = actionButton("한영", ::sendLanguageToggle)
-        header.addView(languageToggleButton, fixedButtonParams(104, left = 6))
-        connectionDrawerButton = actionButton("연결", ::showConnectionPanel)
-        header.addView(connectionDrawerButton, fixedButtonParams(104, left = 6))
-        panel.addView(header, matchWrap(bottom = 10))
 
         trackpadSurface = FrameLayout(this).apply {
             isClickable = true
@@ -622,32 +603,83 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        panel.addView(
+        touchpadColumn.addView(
             trackpadSurface,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
-                bottomMargin = dp(12)
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
+        )
+        panel.addView(
+            touchpadColumn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                rightMargin = dp(14)
             },
         )
 
-        panel.addView(
+        val controlsColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        fun controlButton(text: String, onClick: () -> Unit): Button {
+            return actionButton(text, onClick).apply {
+                minHeight = dp(40)
+                minimumHeight = dp(40)
+                setPadding(dp(4), 0, dp(4), 0)
+            }
+        }
+        fun controlScrollButton(text: String, direction: Int): Button {
+            return scrollButton(text, direction).apply {
+                minHeight = dp(40)
+                minimumHeight = dp(40)
+                setPadding(dp(4), 0, dp(4), 0)
+            }
+        }
+
+        connectionStatusChip = statusChip()
+        controlsColumn.addView(connectionStatusChip, matchWrap(bottom = 6))
+
+        compactHostOsButton = controlButton("자동", ::cycleHostOsPreset)
+        controlsColumn.addView(compactHostOsButton, matchWrap(bottom = 6))
+
+        controlsColumn.addView(
             buttonRow(
-                actionButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
-                actionButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
-                scrollButton("스크롤 ↑", SCROLL_UP),
-                scrollButton("스크롤 ↓", SCROLL_DOWN),
-                actionButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
+                controlButton("한영", ::sendLanguageToggle).also { languageToggleButton = it },
+                controlButton("연결", ::showConnectionPanel).also { connectionDrawerButton = it },
             ),
-            matchWrap(bottom = 10),
+            matchWrap(bottom = 6),
         )
 
-        dragButton = actionButton("Drag", ::toggleDragMode).apply {
-            minHeight = dp(54)
-        }
-        panel.addView(dragButton, matchWrap(bottom = 8))
+        controlsColumn.addView(
+            buttonRow(
+                controlButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
+                controlButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
+            ),
+            matchWrap(bottom = 6),
+        )
 
-        doubleTapDragButton = actionButton("", ::toggleDoubleTapDrag)
-        scrollSpeedButton = actionButton("", ::cycleScrollSpeed)
-        panel.addView(buttonRow(doubleTapDragButton, scrollSpeedButton), matchWrap())
+        controlsColumn.addView(
+            buttonRow(
+                controlScrollButton("스크롤 ↑", SCROLL_UP),
+                controlScrollButton("스크롤 ↓", SCROLL_DOWN),
+            ),
+            matchWrap(bottom = 6),
+        )
+
+        dragButton = controlButton("Drag", ::toggleDragMode)
+        controlsColumn.addView(
+            buttonRow(
+                controlButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
+                dragButton,
+            ),
+            matchWrap(bottom = 6),
+        )
+
+        doubleTapDragButton = controlButton("", ::toggleDoubleTapDrag)
+        scrollSpeedButton = controlButton("", ::cycleScrollSpeed)
+        controlsColumn.addView(buttonRow(doubleTapDragButton, scrollSpeedButton), matchWrap())
+
+        panel.addView(
+            controlsColumn,
+            LinearLayout.LayoutParams(dp(300), ViewGroup.LayoutParams.MATCH_PARENT),
+        )
 
         return panel
     }
@@ -1843,6 +1875,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             maxLines = 2
+            minHeight = dp(40)
             setPadding(dp(10), 0, dp(10), 0)
             background = rounded(COLOR_INFO, dp(8), COLOR_STROKE)
         }
