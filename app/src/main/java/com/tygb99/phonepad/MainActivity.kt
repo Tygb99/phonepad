@@ -24,6 +24,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -138,7 +139,7 @@ class MainActivity : Activity() {
         skipAutoReconnectOnce = false
         pendingAutoReconnectAddress = null
         pendingDiscoverableRequest = false
-        stopInputSession("activity_stopped", closeProfile = false)
+        pauseInputSession("activity_stopped")
     }
 
     private val autoReconnectTimeoutRunnable = Runnable {
@@ -377,13 +378,12 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    override fun onBackPressed() {
-        if (::connectionDrawer.isInitialized && connectionDrawer.visibility == View.VISIBLE) {
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && isConnectionPanelVisible()) {
             hideConnectionPanel()
-            return
+            return true
         }
-        super.onBackPressed()
+        return super.onKeyUp(keyCode, event)
     }
 
     override fun onRequestPermissionsResult(
@@ -781,6 +781,7 @@ class MainActivity : Activity() {
             setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켜면 HID 세션이 자동으로 준비됩니다.")
             return
         }
+        keepHidSessionInForeground()
         if (hidDevice == null) {
             openHidProfile()
             return
@@ -861,9 +862,42 @@ class MainActivity : Activity() {
         if (closeProfile) {
             hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
             hidDevice = null
+            stopService(Intent(this, HidSessionService::class.java))
         }
         if (!closeProfile && ::statusText.isInitialized) {
             setStatus("앱이 백그라운드로 이동해 HID 세션을 정리했습니다.")
+            refreshControls()
+        }
+    }
+
+    private fun keepHidSessionInForeground() {
+        val intent = Intent(this, HidSessionService::class.java)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (error: RuntimeException) {
+            Log.w(LOG_TAG, "Unable to start HID foreground service", error)
+        }
+    }
+
+    private fun pauseInputSession(reason: String) {
+        stopContinuousScroll()
+        if (dragMode || doubleTapDragActive) {
+            releaseAllMouseButtons(reason)
+        }
+        pendingAutoReconnectAddress = null
+        skipAutoReconnectOnce = false
+        pendingDiscoverableRequest = false
+        clearPendingConnection()
+        clearPendingHostSwitch()
+        mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
+        dragMode = false
+        doubleTapDragActive = false
+        if (::statusText.isInitialized) {
+            setStatus("앱이 백그라운드로 이동했습니다. HID 연결은 유지합니다.")
             refreshControls()
         }
     }
@@ -1015,20 +1049,33 @@ class MainActivity : Activity() {
     private fun refreshBondedHosts(showStatus: Boolean) {
         val knownHostAddresses = knownHostAddresses()
         val candidateHostAddresses = candidateHostAddresses()
+        val selectedAddress = selectedHost()?.address
+        val activeAddress = activeHost?.address
+        val lastAddress = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_LAST_HOST_ADDRESS, null)
+        val rememberedHostAddresses = knownHostAddresses +
+            candidateHostAddresses +
+            listOfNotNull(selectedAddress, activeAddress, lastAddress)
         bondedHosts = if (hasNearbyDevicePermissions()) {
             bluetoothAdapter?.bondedDevices
                 ?.filter { device ->
-                    device.address in knownHostAddresses ||
-                        device.address in candidateHostAddresses ||
-                        device.address == activeHost?.address ||
-                        device.isLikelyComputerHost()
+                    device.address in rememberedHostAddresses ||
+                        device.isLikelyComputerHost() ||
+                        device.isLikelyNamedHost()
                 }
                 ?.sortedBy { it.safeSortLabel() }
                 ?: emptyList()
         } else {
             emptyList()
         }
-        if (selectedHostIndex !in bondedHosts.indices) selectedHostIndex = 0
+        val preferredAddress = listOfNotNull(selectedAddress, activeAddress, lastAddress)
+            .firstOrNull { address -> bondedHosts.any { it.address == address } }
+        selectedHostIndex = if (preferredAddress != null) {
+            bondedHosts.indexOfFirst { it.address == preferredAddress }
+        } else if (selectedHostIndex in bondedHosts.indices) {
+            selectedHostIndex
+        } else {
+            0
+        }
         if (showStatus) setStatus("페어링된 PC 후보 ${bondedHosts.size}개를 불러왔습니다.")
         refreshControls()
     }
@@ -1335,6 +1382,10 @@ class MainActivity : Activity() {
     private fun hideConnectionPanel() {
         connectionDrawer.visibility = View.GONE
         unregisterDrawerBackCallback()
+    }
+
+    private fun isConnectionPanelVisible(): Boolean {
+        return ::connectionDrawer.isInitialized && connectionDrawer.visibility == View.VISIBLE
     }
 
     private fun registerDrawerBackCallback() {
@@ -1664,7 +1715,12 @@ class MainActivity : Activity() {
             current.rememberSuccessfulHost()
             return current
         }
-        val connected = hid.connectedDevices.firstOrNull()
+        val selectedAddress = selectedHost()?.address
+        val lastAddress = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_LAST_HOST_ADDRESS, null)
+        val connectedDevices = hid.connectedDevices
+        val connected = connectedDevices.firstOrNull { it.address == selectedAddress }
+            ?: connectedDevices.firstOrNull { it.address == lastAddress }
+            ?: connectedDevices.firstOrNull()
         if (connected != null) {
             activeHost = connected
             connectionState = BluetoothProfile.STATE_CONNECTED
@@ -1846,6 +1902,18 @@ class MainActivity : Activity() {
     private fun BluetoothDevice.isLikelyComputerHost(): Boolean {
         if (!hasNearbyDevicePermissions()) return false
         return bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothDevice.isLikelyNamedHost(): Boolean {
+        if (!hasNearbyDevicePermissions()) return false
+        val normalized = name.orEmpty().lowercase(Locale.US)
+        return normalized.contains("mac") ||
+            normalized.contains("windows") ||
+            normalized.contains("win11") ||
+            normalized.contains("win10") ||
+            normalized.contains(" pc") ||
+            normalized.endsWith("pc")
     }
 
     @SuppressLint("MissingPermission")
