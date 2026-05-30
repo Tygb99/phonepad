@@ -42,4 +42,18 @@ class HostInputPolicyTest {
         assertEquals(HostOsPreset.AUTO, preset)
         assertNull(HostInputPolicy.languageToggleStroke(preset))
     }
+
+    @Test
+    fun unknownStorageValueFallsBackToAuto() {
+        assertEquals(HostOsPreset.AUTO, HostOsPreset.fromStorageValue(null))
+        assertEquals(HostOsPreset.AUTO, HostOsPreset.fromStorageValue("linux"))
+    }
+
+    @Test
+    fun manualPresetCyclesThroughAvailableHostModes() {
+        assertEquals(HostOsPreset.MAC, HostOsPreset.AUTO.nextManualPreset())
+        assertEquals(HostOsPreset.WINDOWS_LANG1, HostOsPreset.MAC.nextManualPreset())
+        assertEquals(HostOsPreset.WINDOWS_RIGHT_ALT, HostOsPreset.WINDOWS_LANG1.nextManualPreset())
+        assertEquals(HostOsPreset.AUTO, HostOsPreset.WINDOWS_RIGHT_ALT.nextManualPreset())
+    }
 }
