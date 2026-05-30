@@ -15,7 +15,7 @@
 | Android 기기 | Samsung Galaxy S23 Ultra, `SM-S918N` |
 | Android 버전 | Android 16, API 36 |
 | 앱 패키지 | `com.tygb99.phonepad` |
-| 앱 버전 | `0.2.0-phase0`, `versionCode=18` |
+| 앱 버전 | `0.1.16-phase0`, `versionCode=17` |
 | 앱 마지막 업데이트 | `2026-05-07 22:20:48` |
 | 저장소 브랜치 | `main` |
 | 저장소 커밋 | `c253b11` (`c253b119e1eb1c8dd17f58d2593566a293bd2a4b`) |
