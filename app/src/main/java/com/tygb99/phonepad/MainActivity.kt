@@ -110,6 +110,7 @@ class MainActivity : Activity() {
     private var pendingHostSwitchReason: String? = null
     private var timedOutConnectionAddress: String? = null
     private var preDiscoverableBondedAddresses: Set<String> = emptySet()
+    private var hidForegroundServiceRunning = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
@@ -148,7 +149,9 @@ class MainActivity : Activity() {
             clearPendingConnection(address)
             activeHost = null
             connectionState = BluetoothProfile.STATE_DISCONNECTED
+            pendingAutoReconnectAddress = null
             setStatus("최근 PC 자동 재연결이 응답하지 않습니다. PC 후보를 선택해 다시 연결하거나 새 PC 연결을 눌러주세요.")
+            reconcileHidForegroundService("auto_reconnect_timeout")
             refreshControls()
         }
         pendingAutoReconnectAddress = null
@@ -171,6 +174,7 @@ class MainActivity : Activity() {
             if (activeHost?.address == address) activeHost = null
             connectionState = BluetoothProfile.STATE_DISCONNECTED
             setStatus(connectionTimeoutMessage(reason, host))
+            reconcileHidForegroundService("connect_timeout_$reason")
             refreshControls()
         }
     }
@@ -209,6 +213,7 @@ class MainActivity : Activity() {
             appRegistered = false
             dragMode = false
             connectionState = BluetoothProfile.STATE_DISCONNECTED
+            stopHidForegroundService("hid_profile_disconnected")
             setStatus("HID 프로필 연결이 끊어졌습니다.")
             refreshControls()
         }
@@ -229,6 +234,7 @@ class MainActivity : Activity() {
                 } else {
                     attemptAutoReconnect()
                 }
+                reconcileHidForegroundService("hid_app_status_changed")
             } else {
                 clearPendingConnection()
                 clearPendingHostSwitch()
@@ -236,6 +242,7 @@ class MainActivity : Activity() {
                 activeHost = null
                 dragMode = false
                 connectionState = BluetoothProfile.STATE_DISCONNECTED
+                stopHidForegroundService("hid_app_unregistered")
                 setStatus("HID 앱 등록이 해제됐습니다.")
             }
             refreshControls()
@@ -254,9 +261,13 @@ class MainActivity : Activity() {
                     mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
                     device?.rememberSuccessfulHost()
                     refreshBondedHosts(showStatus = false)
+                    startHidForegroundService("host_connected")
                     setStatus("호스트와 연결됐습니다: ${device.safeLabel()}")
                 }
-                BluetoothProfile.STATE_CONNECTING -> setStatus("호스트 연결 중: ${device.safeLabel()}")
+                BluetoothProfile.STATE_CONNECTING -> {
+                    startHidForegroundService("host_connecting")
+                    setStatus("호스트 연결 중: ${device.safeLabel()}")
+                }
                 BluetoothProfile.STATE_DISCONNECTING -> {
                     stopContinuousScroll()
                     releaseAllMouseButtons("host_disconnecting")
@@ -296,6 +307,9 @@ class MainActivity : Activity() {
                     } else if (!wasAutoReconnect && !wasPendingConnection && !wasTimedOutConnection && !hasOtherPendingConnection) {
                         setStatus("호스트 연결이 끊어졌습니다.")
                     }
+                    if (!hasPendingHostSwitch) {
+                        reconcileHidForegroundService("host_disconnected")
+                    }
                 }
             }
             refreshControls()
@@ -315,6 +329,7 @@ class MainActivity : Activity() {
             if (activeHost?.address == device?.address) activeHost = null
             dragMode = false
             connectionState = BluetoothProfile.STATE_DISCONNECTED
+            stopHidForegroundService("virtual_cable_unplug")
             setStatus("가상 케이블 연결이 해제됐습니다.")
             refreshControls()
         }
@@ -781,7 +796,6 @@ class MainActivity : Activity() {
             setStatus("Bluetooth가 꺼져 있습니다. Bluetooth를 켜면 HID 세션이 자동으로 준비됩니다.")
             return
         }
-        keepHidSessionInForeground()
         if (hidDevice == null) {
             openHidProfile()
             return
@@ -862,7 +876,7 @@ class MainActivity : Activity() {
         if (closeProfile) {
             hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
             hidDevice = null
-            stopService(Intent(this, HidSessionService::class.java))
+            stopHidForegroundService("input_session_closed")
         }
         if (!closeProfile && ::statusText.isInitialized) {
             setStatus("앱이 백그라운드로 이동해 HID 세션을 정리했습니다.")
@@ -870,7 +884,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun keepHidSessionInForeground() {
+    private fun startHidForegroundService(reason: String) {
+        if (hidForegroundServiceRunning) return
         val intent = Intent(this, HidSessionService::class.java)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -878,9 +893,48 @@ class MainActivity : Activity() {
             } else {
                 startService(intent)
             }
+            hidForegroundServiceRunning = true
+            Log.d(LOG_TAG, "hid_foreground_service=start reason=$reason")
         } catch (error: RuntimeException) {
             Log.w(LOG_TAG, "Unable to start HID foreground service", error)
         }
+    }
+
+    private fun stopHidForegroundService(reason: String) {
+        stopService(Intent(this, HidSessionService::class.java))
+        if (hidForegroundServiceRunning) {
+            Log.d(LOG_TAG, "hid_foreground_service=stop reason=$reason")
+        }
+        hidForegroundServiceRunning = false
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun reconcileHidForegroundService(reason: String) {
+        val shouldRun = HidForegroundServicePolicy.shouldRun(
+            appRegistered = appRegistered,
+            connected = hasConnectedHostForForegroundService(),
+            connectionPending = connectionState == BluetoothProfile.STATE_CONNECTING ||
+                pendingConnectionAddress != null ||
+                pendingAutoReconnectAddress != null ||
+                pendingHostSwitchAddress != null,
+            discoverablePending = pendingDiscoverableRequest || externalBluetoothFlowActive,
+        )
+        if (shouldRun) {
+            startHidForegroundService(reason)
+        } else {
+            stopHidForegroundService(reason)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun hasConnectedHostForForegroundService(): Boolean {
+        val active = activeHost
+        val hid = hidDevice
+        if (!hasNearbyDevicePermissions() || hid == null) {
+            return active != null && connectionState == BluetoothProfile.STATE_CONNECTED
+        }
+        return active?.let { hid.getConnectionState(it) == BluetoothProfile.STATE_CONNECTED } == true ||
+            hid.connectedDevices.isNotEmpty()
     }
 
     private fun pauseInputSession(reason: String) {
@@ -947,10 +1001,12 @@ class MainActivity : Activity() {
             pendingAutoReconnectAddress = null
             mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
             setStatus("새 PC 연결을 위해 HID 세션을 먼저 준비합니다.")
+            startHidForegroundService("discoverable_prepare")
             startInputSession()
             refreshControls()
             return
         }
+        startHidForegroundService("discoverable_request")
         val adapter = bluetoothAdapter
         val visibleName = setAdvertisedBluetoothName()
         if (visibleName == null) {
@@ -976,6 +1032,7 @@ class MainActivity : Activity() {
 
         if (newHost == null) {
             refreshBondedHosts(showStatus = false)
+            reconcileHidForegroundService("new_pc_flow_no_candidate")
             return
         }
 
@@ -989,6 +1046,7 @@ class MainActivity : Activity() {
         setStatus("새 PC 후보를 선택했습니다: ${newHost.safeLabel()}. 0.1.5 방식처럼 호스트 연결/전환을 눌러 연결하세요.")
 
         if (!appRegistered || hidDevice == null) startInputSession()
+        reconcileHidForegroundService("new_pc_flow_candidate_selected")
         refreshControls()
     }
 
@@ -1000,6 +1058,7 @@ class MainActivity : Activity() {
         autoReconnectAttempted = true
 
         if (connectedHost() != null) {
+            startHidForegroundService("auto_reconnect_already_connected")
             setStatus("최근 PC와 이미 연결돼 있습니다.")
             refreshControls()
             return
@@ -1009,6 +1068,7 @@ class MainActivity : Activity() {
         val candidate = autoReconnectCandidate()
         if (candidate == null) {
             setStatus("HID 세션이 준비됐습니다. 기존 PC가 없으면 새 PC 연결을 눌러 페어링하세요.")
+            reconcileHidForegroundService("auto_reconnect_no_candidate")
             refreshControls()
             return
         }
@@ -1142,17 +1202,24 @@ class MainActivity : Activity() {
     private fun attemptPendingHostSwitch() {
         val address = pendingHostSwitchAddress ?: return
         val reason = pendingHostSwitchReason ?: "manual_switch"
-        clearPendingHostSwitch(address)
-        if (!hasNearbyDevicePermissions() || !appRegistered || hidDevice == null) return
+        if (!hasNearbyDevicePermissions() || !appRegistered || hidDevice == null) {
+            clearPendingHostSwitch(address)
+            reconcileHidForegroundService("host_switch_not_ready")
+            return
+        }
+        startHidForegroundService("host_switch_pending")
         refreshBondedHosts(showStatus = false)
         val host = bondedHosts.firstOrNull { it.address == address }
             ?: bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == address }
             ?: run {
+                clearPendingHostSwitch(address)
+                reconcileHidForegroundService("host_switch_missing_target")
                 setStatus("전환 대상 PC를 찾지 못했습니다. 목록 새로고침 또는 새 PC 연결을 다시 시도하세요.")
                 refreshControls()
                 return
             }
         mainHandler.postDelayed({
+            clearPendingHostSwitch(address)
             logHostDiagnostic("connect_after_switch_$reason", host)
             connectHost(host, reason)
         }, HOST_SWITCH_CONNECT_DELAY_MS)
@@ -1167,10 +1234,12 @@ class MainActivity : Activity() {
             activeHost = current
             connectionState = BluetoothProfile.STATE_CONNECTED
             clearPendingConnection(host.address)
+            startHidForegroundService("connect_already_connected")
             setStatus("이미 연결된 호스트입니다: ${host.safeLabel()}")
             return true
         }
         if (current != null && current.address != host.address) {
+            startHidForegroundService("host_switch_request")
             pendingHostSwitchAddress = host.address
             pendingHostSwitchReason = reason
             pendingAutoReconnectAddress = null
@@ -1198,6 +1267,7 @@ class MainActivity : Activity() {
         timedOutConnectionAddress = null
         mainHandler.removeCallbacks(autoReconnectTimeoutRunnable)
         logHostDiagnostic("connect_request_$reason", host)
+        startHidForegroundService("connect_request_$reason")
         val accepted = hid.connect(host)
         if (accepted) {
             activeHost = host
@@ -1221,6 +1291,7 @@ class MainActivity : Activity() {
             connectionState = BluetoothProfile.STATE_DISCONNECTED
             val detail = hostDiagnosticSummary(host)
             Log.w(LOG_TAG, "connect request rejected reason=$reason $detail")
+            reconcileHidForegroundService("connect_rejected_$reason")
             setStatus("호스트 연결 요청이 거절됐습니다. 로그에서 Windows/HID 상태를 확인하세요.")
         }
         refreshControls()
@@ -1245,6 +1316,7 @@ class MainActivity : Activity() {
         activeHost = null
         dragMode = false
         connectionState = BluetoothProfile.STATE_DISCONNECTED
+        stopHidForegroundService("manual_disconnect")
         setStatus(if (accepted) "호스트 연결 해제를 요청했습니다." else "호스트 연결 해제 요청이 거절됐습니다.")
         refreshControls()
     }
@@ -1265,6 +1337,7 @@ class MainActivity : Activity() {
             releaseAllMouseButtons("remove_bond")
             releaseAllKeyboardKeys("remove_bond")
             hidDevice?.disconnect(host)
+            stopHidForegroundService("remove_bond")
         }
         pendingAutoReconnectAddress = null
         clearPendingConnection(host.address)
