@@ -15,7 +15,7 @@ Result: the tested Galaxy S23 Ultra and paired macOS host passed the ADB-verifia
 | Android device | Samsung Galaxy S23 Ultra, `SM-S918N` |
 | Android version | Android 16, API 36 |
 | App package | `com.tygb99.phonepad` |
-| App version | `0.2.0-phase0`, `versionCode=18` |
+| App version | `0.1.16-phase0`, `versionCode=17` |
 | App last update | `2026-05-07 22:20:48` |
 | Repo branch | `main` |
 | Repo commit | `c253b11` (`c253b119e1eb1c8dd17f58d2593566a293bd2a4b`) |
