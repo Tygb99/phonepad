@@ -98,6 +98,7 @@ class MainActivity : Activity() {
     private var debugExpanded = false
     private var advancedExpanded = false
     private var drawerBackCallbackRegistered = false
+    private var drawerBackCallback: Any? = null
     private var autoSessionActive = false
     private var externalBluetoothFlowActive = false
     private var autoReconnectAttempted = false
@@ -114,8 +115,6 @@ class MainActivity : Activity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
-    private val drawerBackCallback = OnBackInvokedCallback { hideConnectionPanel() }
-
     private val scrollRepeatRunnable = object : Runnable {
         override fun run() {
             val button = activeScrollButton ?: return
@@ -1463,16 +1462,21 @@ class MainActivity : Activity() {
 
     private fun registerDrawerBackCallback() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || drawerBackCallbackRegistered) return
+        val callback = OnBackInvokedCallback { hideConnectionPanel() }
+        drawerBackCallback = callback
         onBackInvokedDispatcher.registerOnBackInvokedCallback(
             OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-            drawerBackCallback,
+            callback,
         )
         drawerBackCallbackRegistered = true
     }
 
     private fun unregisterDrawerBackCallback() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || !drawerBackCallbackRegistered) return
-        onBackInvokedDispatcher.unregisterOnBackInvokedCallback(drawerBackCallback)
+        (drawerBackCallback as? OnBackInvokedCallback)?.let {
+            onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it)
+        }
+        drawerBackCallback = null
         drawerBackCallbackRegistered = false
     }
 

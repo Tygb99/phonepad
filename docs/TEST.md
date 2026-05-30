@@ -74,6 +74,17 @@ Pass criteria:
 - Scroll speed: verify slow/default/fast presets and confirm the default still avoids macOS hold-scroll over-acceleration.
 - Windows failure logging: when Windows stays connecting or disconnects, capture `PhonePad` logcat `host_diag`, `defer_switch_*`, `connect_after_switch_*`, `connect_request_*`, and `connect_timeout_*` lines.
 
+## Host Language / Guide Panel Smoke Checks
+
+- Android 12 or below: app launches without startup crash.
+- Android 13 or above: system back closes the connection drawer.
+- Bluetooth off: app shows a clear Bluetooth status and does not crash.
+- Bluetooth on: HID session registers and host candidates remain visible.
+- Background while connected: active mouse buttons are released and the HID session remains alive.
+- Windows 11: language toggle sends LANG1 by default, or Right Alt when that preset is selected.
+- macOS: language toggle sends the staged Control + Space chord.
+- Manifest: `INTERNET` permission remains absent.
+
 ## Release Gate Checklist
 
 - `INTERNET` absent from manifest.
