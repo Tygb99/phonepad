@@ -32,6 +32,7 @@ PhonePad는 문서화와 Phase 0 스파이크 단계입니다. 비공개 기획 
 | [SECURITY.md](SECURITY.md) | 권한, 로깅, 텔레메트리, 데이터 처리를 추가할 때. |
 | [TEST.md](TEST.md) | 호환성, 드래그, 재연결, 릴리스 게이트를 검증할 때. |
 | [PHASE0_TEST_REPORT_2026-05-27.md](PHASE0_TEST_REPORT_2026-05-27.md) | 최신 ADB Phase 0 검증 근거가 필요할 때. |
+| [ANDROID12_COMPAT_SMOKE_2026-05-31.md](ANDROID12_COMPAT_SMOKE_2026-05-31.md) | Android 12 이하 시작 및 drawer back 호환성 스모크 결과가 필요할 때. |
 | [ROADMAP.md](ROADMAP.md) | 단계 순서와 범위 경계가 필요할 때. |
 | [DEPLOY.md](DEPLOY.md) | GitHub Releases 또는 Play Store를 준비할 때. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | GitHub 이슈, PR, 스파이크로 협업할 때. |
