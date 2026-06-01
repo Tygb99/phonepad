@@ -32,6 +32,7 @@ PhonePad is in a documentation and Phase 0 spike stage. The docs are organized s
 | [SECURITY.md](SECURITY.md) | You are adding permissions, logging, telemetry, or data handling. |
 | [TEST.md](TEST.md) | You are verifying compatibility, drag, reconnection, or release gates. |
 | [PHASE0_TEST_REPORT_2026-05-27.md](PHASE0_TEST_REPORT_2026-05-27.md) | You need the latest recorded ADB Phase 0 verification evidence. |
+| [HOST_LANGUAGE_TOGGLE_SMOKE_2026-05-29.md](HOST_LANGUAGE_TOGGLE_SMOKE_2026-05-29.md) | You need the recorded macOS Korean/English language-toggle success evidence. |
 | [ANDROID12_COMPAT_SMOKE_2026-05-31.md](ANDROID12_COMPAT_SMOKE_2026-05-31.md) | You need the Android 12-or-below launch and drawer-back compatibility smoke result. |
 | [ROADMAP.md](ROADMAP.md) | You need phase order and scope boundaries. |
 | [DEPLOY.md](DEPLOY.md) | You are preparing GitHub Releases or Play Store. |
