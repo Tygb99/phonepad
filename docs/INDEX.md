@@ -33,6 +33,7 @@ PhonePad is in a documentation and Phase 0 spike stage. The docs are organized s
 | [TEST.md](TEST.md) | You are verifying compatibility, drag, reconnection, or release gates. |
 | [WINDOWS_DEV.md](WINDOWS_DEV.md) | You are setting up or building the Android app on Windows. |
 | [PHASE0_TEST_REPORT_2026-05-27.md](PHASE0_TEST_REPORT_2026-05-27.md) | You need the latest recorded ADB Phase 0 verification evidence. |
+| [WINDOWS_REPAIRING_RESET_SMOKE_2026-06-02.md](WINDOWS_REPAIRING_RESET_SMOKE_2026-06-02.md) | You need the Windows stale-pairing recovery evidence from logcat. |
 | [HOST_LANGUAGE_TOGGLE_SMOKE_2026-05-29.md](HOST_LANGUAGE_TOGGLE_SMOKE_2026-05-29.md) | You need the recorded macOS Korean/English language-toggle success evidence. |
 | [ANDROID12_COMPAT_SMOKE_2026-05-31.md](ANDROID12_COMPAT_SMOKE_2026-05-31.md) | You need the Android 12-or-below launch and drawer-back compatibility smoke result. |
 | [ROADMAP.md](ROADMAP.md) | You need phase order and scope boundaries. |

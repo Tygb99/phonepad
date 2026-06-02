@@ -20,7 +20,7 @@
 | 저장소 브랜치 | `main` |
 | 저장소 커밋 | `c253b11` (`c253b119e1eb1c8dd17f58d2593566a293bd2a4b`) |
 | 페어링된 호스트 표시명 | `yong의 Mac mini` |
-| ADB transport | device serial redacteddevice serial redacted`device serial redacted` |
+| ADB transport | Wireless ADB, device serial redacted |
 
 ## 범위
 
