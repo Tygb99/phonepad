@@ -77,6 +77,15 @@ export ANDROID_SDK_ROOT="$ANDROID_HOME"
 ./gradlew :app:assembleDebug
 ```
 
+On Windows, use the PowerShell setup and build helpers:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1
+.\scripts\build-windows.ps1 -Target all
+```
+
+See [docs/WINDOWS_DEV.md](docs/WINDOWS_DEV.md) for JDK 17, Android SDK, APK build, and device install details.
+
 Install on a connected Android device:
 
 ```bash

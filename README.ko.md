@@ -77,6 +77,15 @@ export ANDROID_SDK_ROOT="$ANDROID_HOME"
 ./gradlew :app:assembleDebug
 ```
 
+Windows에서는 PowerShell 설정/빌드 스크립트를 사용합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1
+.\scripts\build-windows.ps1 -Target all
+```
+
+JDK 17, Android SDK, APK 빌드, 기기 설치 절차는 [docs/ko/WINDOWS_DEV.md](docs/ko/WINDOWS_DEV.md)를 참고하세요.
+
 연결된 Android 기기에 설치:
 
 ```bash
