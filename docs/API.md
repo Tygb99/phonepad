@@ -68,6 +68,8 @@ onPointerMove(dx, dy)
 
 ## Bridge Dongle Packet Draft
 
+The detailed BLE packet source of truth is [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md). Keep the v1 4-byte mouse packet compatible while adding v2 safety and chord commands.
+
 ```text
 Packet: MouseMove
 - type: 0x01
@@ -87,6 +89,14 @@ Packet: Control
 - command: release_all_buttons | ping | ack
 ```
 
+Current iOS sender + ESP32-S3 spike packet types:
+
+```text
+0x10: ReleaseAll(seq)
+0x11: KeyChord(seq, modifier_mask, keys[0...6])
+0x12: LanguageToggle(seq, host_profile)
+```
+
 ## Error Code Families
 
 | Prefix | Meaning |
@@ -103,3 +113,4 @@ Packet: Control
 - [HID.md](HID.md)
 - [DRAG_MODE.md](DRAG_MODE.md)
 - [BRIDGE_DONGLE.md](BRIDGE_DONGLE.md)
+- [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)

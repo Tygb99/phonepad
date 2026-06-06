@@ -88,7 +88,7 @@ PhonePad 전용 후속 확인:
 
 ## 패킷 초안
 
-현재 MouseMove, KeyCombo, Control 패킷 초안은 [API.md](API.md)를 참고합니다.
+BLE GATT UUID, v1 마우스 호환 패킷, v2 `ReleaseAll`, `KeyChord`, host language-toggle 패킷은 [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)를 참고합니다.
 
 ## 결정 게이트
 
@@ -102,6 +102,7 @@ PhonePad 전용 후속 확인:
 ## 관련 문서
 
 - [API.md](API.md)
+- [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)
 - [HID.md](HID.md)
 - [ROADMAP.md](ROADMAP.md)
 - [TEST.md](TEST.md)

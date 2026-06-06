@@ -40,6 +40,7 @@ PhonePad는 문서화와 Phase 0 스파이크 단계입니다. 비공개 기획 
 | [DEPLOY.md](DEPLOY.md) | GitHub Releases 또는 Play Store를 준비할 때. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | GitHub 이슈, PR, 스파이크로 협업할 때. |
 | [BRIDGE_DONGLE.md](BRIDGE_DONGLE.md) | 하드웨어 Plan B를 검증할 때. |
+| [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md) | iOS sender 또는 ESP32-S3 BLE packet 동작을 바꿀 때. |
 
 ## 관련 문서
 

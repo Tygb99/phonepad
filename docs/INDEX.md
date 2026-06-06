@@ -40,6 +40,7 @@ PhonePad is in a documentation and Phase 0 spike stage. The docs are organized s
 | [DEPLOY.md](DEPLOY.md) | You are preparing GitHub Releases or Play Store. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | You are collaborating through GitHub issues, PRs, or spikes. |
 | [BRIDGE_DONGLE.md](BRIDGE_DONGLE.md) | You are validating the hardware Plan B. |
+| [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md) | You are changing iOS sender or ESP32-S3 BLE packet behavior. |
 
 ## Related Docs
 

@@ -88,7 +88,7 @@ PhonePad-specific follow-up checks:
 
 ## Packet Draft
 
-See [API.md](API.md) for the current MouseMove, KeyCombo, and Control packet draft.
+See [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md) for the BLE GATT UUIDs, v1 mouse compatibility packet, v2 `ReleaseAll`, `KeyChord`, and host language-toggle packets.
 
 ## Decision Gate
 
@@ -102,6 +102,7 @@ Proceed beyond spike only if at least one of these is true:
 ## Related Docs
 
 - [API.md](API.md)
+- [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)
 - [HID.md](HID.md)
 - [ROADMAP.md](ROADMAP.md)
 - [TEST.md](TEST.md)

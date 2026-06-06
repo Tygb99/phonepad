@@ -68,6 +68,8 @@ onPointerMove(dx, dy)
 
 ## Bridge Dongle 패킷 초안
 
+자세한 BLE packet source of truth는 [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)입니다. v1 4바이트 mouse packet 호환성을 유지하면서 v2 safety/chord 명령을 추가합니다.
+
 ```text
 Packet: MouseMove
 - type: 0x01
@@ -87,6 +89,14 @@ Packet: Control
 - command: release_all_buttons | ping | ack
 ```
 
+현재 iOS sender + ESP32-S3 spike packet type:
+
+```text
+0x10: ReleaseAll(seq)
+0x11: KeyChord(seq, modifier_mask, keys[0...6])
+0x12: LanguageToggle(seq, host_profile)
+```
+
 ## 오류 코드 계열
 
 | 접두사 | 의미 |
@@ -103,3 +113,4 @@ Packet: Control
 - [HID.md](HID.md)
 - [DRAG_MODE.md](DRAG_MODE.md)
 - [BRIDGE_DONGLE.md](BRIDGE_DONGLE.md)
+- [DONGLE_PROTOCOL.md](DONGLE_PROTOCOL.md)
