@@ -54,8 +54,7 @@ Android/app/build/outputs/apk/debug/app-debug.apk
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-cd Android
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 연결된 Android 기기 설치 명령:

@@ -54,8 +54,7 @@ Local build command:
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-cd Android
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 Install command for a connected Android device:

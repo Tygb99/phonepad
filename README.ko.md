@@ -74,8 +74,7 @@ PhonePad는 광고, 계정, 분석 SDK, 추적 SDK, 인터넷 권한을 사용�
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-cd Android
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 Windows에서는 PowerShell 설정/빌드 스크립트를 사용합니다.
