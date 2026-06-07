@@ -13,9 +13,11 @@ coverage/
 
 # Android / Gradle
 .gradle/
-android/.gradle/
-android/app/build/
-android/build/
+.kotlin/
+Android/.gradle/
+Android/.kotlin/
+Android/app/build/
+Android/build/
 *.apk
 *.aab
 local.properties

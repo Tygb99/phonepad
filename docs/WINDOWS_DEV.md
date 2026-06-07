@@ -21,43 +21,43 @@ Make PhonePad buildable from a clean Windows PowerShell environment without requ
 From the repository root:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Android\scripts\setup-windows-dev.ps1
 ```
 
 If JDK 17 or Android SDK command-line tools are missing, run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1 -InstallMissing -AcceptAndroidLicenses
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Android\scripts\setup-windows-dev.ps1 -InstallMissing -AcceptAndroidLicenses
 ```
 
 Add `-PersistUserEnv` if you want the script to save `JAVA_HOME`, `ANDROID_HOME`, and `ANDROID_SDK_ROOT` for future PowerShell windows:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1 -InstallMissing -AcceptAndroidLicenses -PersistUserEnv
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Android\scripts\setup-windows-dev.ps1 -InstallMissing -AcceptAndroidLicenses -PersistUserEnv
 ```
 
-The setup script writes `local.properties` with your local Android SDK path. That file is ignored by git.
+The setup script writes `Android/local.properties` with your local Android SDK path. That file is ignored by git.
 
 ## Build
 
 Run all local development checks:
 
 ```powershell
-.\scripts\build-windows.ps1 -Target all
+.\Android\scripts\build-windows.ps1 -Target all
 ```
 
 Run a narrower target:
 
 ```powershell
-.\scripts\build-windows.ps1 -Target test
-.\scripts\build-windows.ps1 -Target debug
-.\scripts\build-windows.ps1 -Target lint
+.\Android\scripts\build-windows.ps1 -Target test
+.\Android\scripts\build-windows.ps1 -Target debug
+.\Android\scripts\build-windows.ps1 -Target lint
 ```
 
 The debug APK is written to:
 
 ```text
-app\build\outputs\apk\debug\app-debug.apk
+Android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
 ## Install On Device
@@ -65,7 +65,7 @@ app\build\outputs\apk\debug\app-debug.apk
 Connect an Android device with USB debugging enabled, then run:
 
 ```powershell
-& "$env:ANDROID_HOME\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
+& "$env:ANDROID_HOME\platform-tools\adb.exe" install -r Android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
 ## Notes

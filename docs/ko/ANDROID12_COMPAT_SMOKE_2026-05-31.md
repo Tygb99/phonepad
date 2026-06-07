@@ -18,7 +18,7 @@
 | 브랜치 | `codex/host-language-toggle-guide-panel` |
 | 커밋 | `c2c4797 fix: defer drawer back callback creation` |
 | 앱 버전 | `0.2.0-phase0`, `versionCode=18` |
-| APK | `app/build/outputs/apk/debug/app-debug.apk` |
+| APK | `Android/app/build/outputs/apk/debug/app-debug.apk` |
 | 기기 | Samsung `SM-N976N` |
 | Android | `12`, API `31` |
 | 앱 target SDK | `36` |
@@ -29,7 +29,7 @@
 
 | 확인 | 결과 | 근거 |
 |---|---|---|
-| Debug APK 빌드 | 통과 | `./gradlew assembleDebug` 성공. |
+| Debug APK 빌드 | 통과 | `cd Android && ./gradlew assembleDebug` 성공. |
 | APK 설치 | 통과 | `adb install -r app-debug.apk`가 `Success` 반환. |
 | 런타임 권한 | 통과 | 스모크 테스트를 위해 `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE` 권한을 부여. |
 | 콜드 런치 | 통과 | force-stop 후 재실행 시 `MainActivity`가 focused window가 됨. |

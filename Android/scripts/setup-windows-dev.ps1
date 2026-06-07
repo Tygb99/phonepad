@@ -273,4 +273,4 @@ Write-Step "Verifying Gradle wrapper"
 
 Write-Host ""
 Write-Host "Windows development setup is ready."
-Write-Host "Next: .\scripts\build-windows.ps1 -Target all"
+Write-Host "Next from the repository root: .\Android\scripts\build-windows.ps1 -Target all"
