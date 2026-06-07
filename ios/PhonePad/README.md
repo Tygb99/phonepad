@@ -1,5 +1,7 @@
 # PhonePad iOS Sender
 
+> Korean version: [README.ko.md](README.ko.md)
+
 PhonePad iOS is a SwiftUI + CoreBluetooth sender for the Bridge Dongle path:
 
 ```text
@@ -10,7 +12,7 @@ This is separate from the Android Direct HID MVP. The iOS Simulator can compile 
 
 - A physical iPhone selected in Xcode.
 - A locally configured Apple developer team for signing.
-- An ESP32-S3 dongle flashed with `firmware/bridge-dongle/BLETouchMouse/BLETouchMouse.ino`.
+- An ESP32-S3 dongle flashed with `shared/firmware/bridge-dongle/BLETouchMouse/BLETouchMouse.ino`.
 - A Mac, Windows PC, or BIOS/UEFI target connected to the dongle over USB.
 
 The checked-in project intentionally omits personal `DEVELOPMENT_TEAM`, `xcuserdata`, and local signing state. Set signing locally in Xcode before installing on a real iPhone, and do not commit personal signing changes.

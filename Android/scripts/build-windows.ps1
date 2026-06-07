@@ -81,12 +81,12 @@ function Assert-Environment {
 
     $javaHome = Find-JavaHome
     if (-not $javaHome) {
-        throw "Java was not found. Run .\scripts\setup-windows-dev.ps1 first."
+        throw "Java was not found. Run .\Android\scripts\setup-windows-dev.ps1 first."
     }
 
     $sdkRoot = Get-SdkRoot
     if (-not $sdkRoot -or -not (Test-Path $sdkRoot)) {
-        throw "Android SDK was not found. Run .\scripts\setup-windows-dev.ps1 first."
+        throw "Android SDK was not found. Run .\Android\scripts\setup-windows-dev.ps1 first."
     }
 
     $env:JAVA_HOME = $javaHome

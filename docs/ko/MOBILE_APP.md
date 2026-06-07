@@ -32,7 +32,7 @@ GitHub Actions는 이제 push, pull request, 수동 실행에서 debug APK를 �
 현재 debug APK 경로:
 
 ```text
-app/build/outputs/apk/debug/app-debug.apk
+Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## 기기 테스트 순서
@@ -54,14 +54,14 @@ app/build/outputs/apk/debug/app-debug.apk
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 연결된 Android 기기 설치 명령:
 
 ```bash
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/platform-tools/adb" install -r Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Manifest 체크리스트

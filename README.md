@@ -42,7 +42,7 @@ Start with:
 - [docs/DRAG_MODE.md](docs/DRAG_MODE.md)
 - [docs/TEST.md](docs/TEST.md)
 
-Planning sources such as PRD drafts and exported chat logs are intentionally ignored by git. Keep product docs in `docs/` and source code in the normal Flutter/Android project tree.
+Platform code is grouped under `Android/` and `ios/`. Shared project assets and bridge firmware live under `shared/`. Product docs stay in `docs/` so existing documentation links remain stable.
 
 ## Android Phase 0 App
 
@@ -51,7 +51,7 @@ This repository now includes a native Kotlin Android spike app for the Direct Bl
 - Package: `com.tygb99.phonepad`
 - Minimum Android: API 28
 - Current target: Android 16 / API 36
-- APK output: `app/build/outputs/apk/debug/app-debug.apk`
+- APK output: `Android/app/build/outputs/apk/debug/app-debug.apk`
 - Runtime permissions: Bluetooth connect and advertise only; no `INTERNET` permission.
 - Validated setup: Windows 11 PC, macOS 26.4.1 development host, Galaxy S23 Ultra on Android 16.
 
@@ -74,14 +74,14 @@ Build locally:
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 On Windows, use the PowerShell setup and build helpers:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-dev.ps1
-.\scripts\build-windows.ps1 -Target all
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Android\scripts\setup-windows-dev.ps1
+.\Android\scripts\build-windows.ps1 -Target all
 ```
 
 See [docs/WINDOWS_DEV.md](docs/WINDOWS_DEV.md) for JDK 17, Android SDK, APK build, and device install details.
@@ -90,7 +90,7 @@ Install on a connected Android device:
 
 ```bash
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/platform-tools/adb" install -r Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Repository

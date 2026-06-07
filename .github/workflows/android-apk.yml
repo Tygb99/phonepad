@@ -42,11 +42,13 @@ jobs:
 
       - name: Build and lint
         run: |
+          cd Android
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug :app:lintDebug --stacktrace
 
       - name: Verify no INTERNET permission
         run: |
+          cd Android
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
 
           if grep -R -n --include='*.xml' 'android.permission.INTERNET' app/src; then
@@ -62,6 +64,7 @@ jobs:
 
       - name: Prepare APK artifact
         run: |
+          cd Android
           VERSION_NAME="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
           SAFE_REF="${GITHUB_REF_NAME//\//-}"
           ARTIFACT_DIR="build/artifacts"
@@ -77,8 +80,8 @@ jobs:
         with:
           name: phonepad-debug-apk
           path: |
-            build/artifacts/*.apk
-            build/artifacts/SHA256SUMS.txt
+            Android/build/artifacts/*.apk
+            Android/build/artifacts/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Attach APK to GitHub Release
@@ -86,6 +89,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cd Android
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" build/artifacts/* --clobber
           else

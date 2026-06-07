@@ -18,7 +18,7 @@ Pass. The debug APK launched on a real Android 12 Samsung device, the connection
 | Branch | `codex/host-language-toggle-guide-panel` |
 | Commit | `c2c4797 fix: defer drawer back callback creation` |
 | App version | `0.2.0-phase0`, `versionCode=18` |
-| APK | `app/build/outputs/apk/debug/app-debug.apk` |
+| APK | `Android/app/build/outputs/apk/debug/app-debug.apk` |
 | Device | Samsung `SM-N976N` |
 | Android | `12`, API `31` |
 | App target SDK | `36` |
@@ -29,7 +29,7 @@ Pass. The debug APK launched on a real Android 12 Samsung device, the connection
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build debug APK | Pass | `./gradlew assembleDebug` completed successfully. |
+| Build debug APK | Pass | `cd Android && ./gradlew assembleDebug` completed successfully. |
 | Install APK | Pass | `adb install -r app-debug.apk` returned `Success`. |
 | Runtime permissions | Pass | `BLUETOOTH_CONNECT` and `BLUETOOTH_ADVERTISE` were granted for the smoke run. |
 | Cold launch | Pass | `MainActivity` became the focused window after force-stop and relaunch. |

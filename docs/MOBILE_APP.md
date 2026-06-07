@@ -32,7 +32,7 @@ GitHub Actions now builds the debug APK on push, pull request, and manual dispat
 Current debug APK path:
 
 ```text
-app/build/outputs/apk/debug/app-debug.apk
+Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Device Test Order
@@ -54,14 +54,14 @@ Local build command:
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew :app:assembleDebug
+(cd Android && ./gradlew :app:assembleDebug)
 ```
 
 Install command for a connected Android device:
 
 ```bash
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/platform-tools/adb" install -r Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Manifest Checklist
