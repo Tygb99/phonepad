@@ -37,7 +37,7 @@ The static landing page in `site/` follows the same quiet-utility direction as t
 
 Landing CTAs:
 
-- Primary CTA links to `https://github.com/Tygb99/phonepad/actions/workflows/android-apk.yml` and names the "Android APK" workflow.
+- Primary CTA links to `https://github.com/Tygb99/phonepad/releases` and names GitHub Releases.
 - Store surfaces must say `Google Play 준비중` and `App Store 준비중`, or otherwise state that store releases are not available yet. Do not imply either store listing exists now.
 - GitHub stars are shown with a dynamic GitHub REST refresh from `https://api.github.com/repos/Tygb99/phonepad` and a static fallback of `1`.
 - GitHub Actions build copy must describe a debug-labeled APK artifact for compatibility testing. `v*` tags may attach the APK and checksum to GitHub Releases, but this is not a Play Store signed build.
