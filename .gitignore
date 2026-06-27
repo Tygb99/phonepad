@@ -1,4 +1,5 @@
 # Local planning sources
+.omo/
 prd-*.md
 KakaoTalk_Chat_*.csv
 gpt의견/

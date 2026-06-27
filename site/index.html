@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="PhonePad는 Android 휴대폰을 표준 Bluetooth 입력장치처럼 쓰는 오픈소스 트랙패드형 컨트롤러입니다.">
+    <meta property="og:title" content="PhonePad">
+    <meta property="og:description" content="Android 휴대폰을 Windows와 macOS용 Bluetooth 트랙패드형 컨트롤러로 사용하세요.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/phonepad-logo.svg">
+    <title>PhonePad</title>
+    <link rel="icon" href="assets/phonepad-logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="components.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="PhonePad home">
+        <img src="assets/phonepad-logo.svg" width="44" height="44" alt="">
+        <span>PhonePad</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#stores">스토어</a>
+        <a href="#build">APK 빌드</a>
+        <a href="https://github.com/Tygb99/phonepad">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Android Direct Bluetooth HID</p>
+          <h1 id="hero-title">휴대폰을 Bluetooth 입력장치로.</h1>
+          <p class="hero-text">PhonePad는 Android 화면을 Windows와 macOS용 트랙패드형 컨트롤러로 바꾸는 오픈소스 앱입니다.</p>
+          <div class="cta-row">
+            <a class="button primary" href="https://github.com/Tygb99/phonepad/actions/workflows/android-apk.yml">Android APK 빌드 보기</a>
+            <a class="button secondary" href="https://github.com/Tygb99/phonepad">GitHub 저장소</a>
+          </div>
+        </div>
+
+        <div class="device-panel" aria-label="PhonePad interaction preview">
+          <div class="phone-shell">
+            <div class="phone-status">
+              <span>Connected: Windows 11</span>
+              <span class="status-dot" aria-hidden="true"></span>
+            </div>
+            <div class="track-surface">
+              <span class="cursor-mark" aria-hidden="true"></span>
+            </div>
+            <div class="phone-actions">
+              <span>Host</span>
+              <span>Settings</span>
+              <strong>Drag</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof-strip" aria-label="Repository status">
+        <div>
+          <span class="metric" id="star-count">1</span>
+          <span class="metric-label">GitHub stars</span>
+        </div>
+        <div>
+          <span class="metric">GPL-3.0</span>
+          <span class="metric-label">무료 오픈소스</span>
+        </div>
+        <div>
+          <span class="metric">No internet</span>
+          <span class="metric-label">앱 권한 기준</span>
+        </div>
+      </section>
+
+      <section class="content-band" aria-labelledby="stores-title">
+        <div class="section-heading" id="stores">
+          <h2 id="stores-title">스토어 배포는 준비중입니다.</h2>
+          <p>Store releases are not available yet. 현재 공개 경로는 GitHub Releases와 Android APK 워크플로입니다.</p>
+        </div>
+        <div class="store-grid">
+          <article class="store-card">
+            <span class="store-name">Google Play</span>
+            <strong>Google Play 준비중</strong>
+            <p>호환성, 권한 안내, 자동 업데이트 경로가 안정화된 뒤 제공할 예정입니다.</p>
+          </article>
+          <article class="store-card">
+            <span class="store-name">App Store</span>
+            <strong>App Store 준비중</strong>
+            <p>Android-first 제품입니다. iOS Direct Bluetooth HID 송신 모드는 v1.0 목표가 아니므로 동등 출시를 암시하지 않습니다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="build-panel" id="build" aria-labelledby="build-title">
+        <div>
+          <h2 id="build-title">직접 빌드하고 확인하세요.</h2>
+          <p>Android APK 워크플로는 호환성 테스트용 debug 표시 APK 산출물을 만듭니다. v* 태그는 APK와 checksum을 Releases에 첨부합니다.</p>
+        </div>
+        <a class="button primary" href="https://github.com/Tygb99/phonepad/actions/workflows/android-apk.yml">Android APK 워크플로 열기</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>PhonePad</span>
+      <span>v1.0은 표준 Bluetooth 마우스/키보드 입력 경로에 집중합니다.</span>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

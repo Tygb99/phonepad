@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="title">
+  <title id="title">PhonePad monogram</title>
+  <rect width="1024" height="1024" rx="180" ry="180" fill="#1E2A78"/>
+  <circle cx="592" cy="432" r="180" fill="none" stroke="#00E0FF" stroke-width="64"/>
+  <path d="M 412,252 L 412,820" stroke="#00E0FF" stroke-width="64" fill="none"/>
+  <g transform="translate(548, 358) scale(7)">
+    <path d="M 0,0 L 0,18 L 5,14 L 8,21 L 11,20 L 8,13 L 14,13 Z" fill="#FFFFFF" stroke="#1E2A78" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>
