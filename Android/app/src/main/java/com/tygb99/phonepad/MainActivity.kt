@@ -1,3 +1,5 @@
+// allow: SIZE_OK - Legacy Activity owns Bluetooth HID, connection, and programmatic touchpad UI;
+// split requires a dedicated behavior-preserving refactor outside the focused 0.2.1 release.
 package com.tygb99.phonepad
 
 import android.Manifest
