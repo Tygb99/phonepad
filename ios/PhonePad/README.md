@@ -29,10 +29,12 @@ Use the `PhonePad` scheme.
 
 ## Current Input Scope
 
-- Pointer movement, click, double-click, right-click, middle-click, and scroll.
+- Pointer movement, click, double-click, right-click, middle-click, and vertical scroll.
 - Single-key keyboard packets.
-- Protocol v2 safety packets for `ReleaseAll`, `KeyChord`, and host-profile language toggle.
+- Protocol v2 safety packets for `ReleaseAll`, `KeyChord`, host-profile language toggle, extended mouse input, and dongle status read/notify.
 - Mac language toggle uses `Control + Space`.
 - Windows language toggle candidates are `LANG1` and `RightAlt`.
+
+The firmware protocol also supports horizontal scroll and back/forward mouse buttons, but the current SwiftUI screen does not expose dedicated controls for them yet.
 
 Full Korean text input is not implemented here. Future Korean input should send physical QWERTY keycodes while the host IME is active, not composed Hangul syllables over BLE.

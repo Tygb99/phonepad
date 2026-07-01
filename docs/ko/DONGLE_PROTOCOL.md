@@ -26,6 +26,33 @@ Writable characteristic UUID:
 7c2d2b6a-8f3e-4c6f-8d6f-01b0f4dd1001
 ```
 
+Status characteristic UUID:
+
+```text
+7c2d2b6a-8f3e-4c6f-8d6f-01b0f4dd1002
+```
+
+Status characteristic은 read와 notify를 지원합니다. 4바이트 값은 다음 형식입니다.
+
+```text
+byte 0: status code
+byte 1: packet type
+byte 2: sequence id
+byte 3: detail
+```
+
+Status code:
+
+| Value | 의미 |
+|---|---|
+| `0x01` | Ready |
+| `0x02` | BLE connected |
+| `0x03` | BLE disconnected |
+| `0x10` | Packet processed |
+| `0x11` | Duplicate sequenced packet ignored |
+| `0x80` | Malformed packet rejected |
+| `0x81` | Unknown packet rejected |
+
 마우스 이동은 `writeWithoutResponse`를 사용할 수 있습니다. 키보드, chord, release/safety 명령은 characteristic이 지원한다면 `writeWithResponse`를 우선 사용합니다.
 
 ## v1 마우스 패킷
@@ -35,11 +62,11 @@ Writable characteristic UUID:
 ```text
 byte 0: dx, int8
 byte 1: dy, int8
-byte 2: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle
+byte 2: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle, bit 3 back, bit 4 forward
 byte 3: wheel, int8
 ```
 
-마우스가 아닌 명령은 펌웨어가 4바이트 값을 계속 마우스 입력으로 처리할 수 있도록 정확히 4바이트를 피해야 합니다.
+정확히 4바이트 값은 항상 v1 마우스 입력으로 처리합니다. 알 수 없는 4바이트가 아닌 명령은 마우스 입력으로 흘려보내지 않고 status characteristic으로 거부 상태를 보고합니다.
 
 ## v1 키보드 단일 키 패킷
 
@@ -116,11 +143,28 @@ Host profile:
 
 Mac `Control + Space`는 PhonePad 호스트 한영 전환 스모크 테스트에서 확인된 로컬 기준입니다. Windows는 Korean IME 설정 차이가 있으므로 호스트별로 `LANG1`과 `RightAlt`를 모두 검증해야 합니다.
 
+### ExtendedMouse
+
+```text
+byte 0: 0x13
+byte 1: sequence id
+byte 2: dx, int8
+byte 3: dy, int8
+byte 4: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle, bit 3 back, bit 4 forward
+byte 5: wheel, int8
+byte 6: pan, int8
+```
+
+이 패킷은 기존 v1 4바이트 마우스 패킷 호환성을 유지하면서 horizontal scroll(`pan`)과 추가 mouse button 2개를 엽니다.
+
+Sequenced v2 packet(`0x10`, `0x11`, `0x12`, `0x13`)은 packet type과 sequence id가 같은 즉시 중복 패킷을 무시합니다.
+
 ## 검증 체크리스트
 
 - iPhone이 ESP32-S3 service를 scan/connect한다.
 - 포인터 이동은 v1 4바이트 패킷으로 계속 동작한다.
-- left click, right click, middle click, scroll이 계속 동작한다.
+- left click, right click, middle click, back, forward, vertical scroll, horizontal scroll이 송신자가 노출하는 범위에서 계속 동작한다.
+- Status read/notify가 ready, connected, processed, duplicate, malformed, unknown-packet 상태를 보고한다.
 - `ReleaseAll`이 모든 mouse button과 keyboard key를 해제한다.
 - app background 또는 manual disconnect 전에 가능한 경우 `ReleaseAll`을 보낸다.
 - Mac profile이 `Control + Space`로 입력 소스를 전환한다.

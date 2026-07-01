@@ -29,10 +29,12 @@ ios/PhonePad/PhonePad.xcodeproj
 
 ## 현재 입력 범위
 
-- 포인터 이동, 클릭, 더블 클릭, 오른쪽 클릭, 가운데 클릭, 스크롤.
+- 포인터 이동, 클릭, 더블 클릭, 오른쪽 클릭, 가운데 클릭, 세로 스크롤.
 - 단일 키 키보드 패킷.
-- `ReleaseAll`, `KeyChord`, 호스트 프로필별 언어 전환을 위한 protocol v2 안전 패킷.
+- `ReleaseAll`, `KeyChord`, 호스트 프로필별 언어 전환, extended mouse input, 동글 status read/notify를 위한 protocol v2 안전 패킷.
 - Mac 언어 전환은 `Control + Space`를 사용합니다.
 - Windows 언어 전환 후보는 `LANG1`과 `RightAlt`입니다.
+
+펌웨어 프로토콜은 horizontal scroll과 back/forward mouse button도 지원하지만, 현재 SwiftUI 화면에는 아직 전용 컨트롤이 노출되어 있지 않습니다.
 
 여기에는 완전한 한국어 텍스트 입력이 구현되어 있지 않습니다. 이후 한국어 입력은 BLE로 조합된 한글 음절을 보내는 방식이 아니라, 호스트 IME가 켜진 상태에서 물리 QWERTY 키코드를 보내는 방식이어야 합니다.

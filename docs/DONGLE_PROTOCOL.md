@@ -26,6 +26,33 @@ Writable characteristic UUID:
 7c2d2b6a-8f3e-4c6f-8d6f-01b0f4dd1001
 ```
 
+Status characteristic UUID:
+
+```text
+7c2d2b6a-8f3e-4c6f-8d6f-01b0f4dd1002
+```
+
+The status characteristic supports read and notify. Its 4-byte value is:
+
+```text
+byte 0: status code
+byte 1: packet type
+byte 2: sequence id
+byte 3: detail
+```
+
+Status codes:
+
+| Value | Meaning |
+|---|---|
+| `0x01` | Ready |
+| `0x02` | BLE connected |
+| `0x03` | BLE disconnected |
+| `0x10` | Packet processed |
+| `0x11` | Duplicate sequenced packet ignored |
+| `0x80` | Malformed packet rejected |
+| `0x81` | Unknown packet rejected |
+
 Mouse movement may use `writeWithoutResponse`. Keyboard, chord, and release/safety commands should prefer `writeWithResponse` when the characteristic supports it.
 
 ## v1 Mouse Packet
@@ -35,11 +62,11 @@ The original mouse packet remains exactly 4 bytes for compatibility:
 ```text
 byte 0: dx, int8
 byte 1: dy, int8
-byte 2: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle
+byte 2: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle, bit 3 back, bit 4 forward
 byte 3: wheel, int8
 ```
 
-Any non-mouse command must avoid exactly 4 bytes so firmware can continue treating 4-byte values as mouse input.
+Exactly 4-byte values are always treated as v1 mouse input. Unknown non-4-byte commands are rejected and reported through the status characteristic instead of falling through to mouse input.
 
 ## v1 Keyboard Key Packet
 
@@ -116,11 +143,28 @@ Host profiles:
 
 Mac `Control + Space` is the known local baseline for PhonePad's host-language smoke test. Windows behavior still needs per-host validation because Korean IME settings vary.
 
+### ExtendedMouse
+
+```text
+byte 0: 0x13
+byte 1: sequence id
+byte 2: dx, int8
+byte 3: dy, int8
+byte 4: buttons bitmask, bit 0 left, bit 1 right, bit 2 middle, bit 3 back, bit 4 forward
+byte 5: wheel, int8
+byte 6: pan, int8
+```
+
+This packet adds horizontal scroll (`pan`) and two extra mouse buttons while keeping the v1 4-byte mouse packet compatible.
+
+Sequenced v2 packets (`0x10`, `0x11`, `0x12`, `0x13`) ignore an immediate duplicate with the same packet type and sequence id.
+
 ## Validation Checklist
 
 - iPhone scans and connects to the ESP32-S3 service.
 - Pointer movement keeps working with the v1 4-byte packet.
-- Click, right click, middle click, and scroll still work.
+- Click, right click, middle click, back, forward, vertical scroll, and horizontal scroll still work where the sender exposes them.
+- Status read/notify reports ready, connected, processed, duplicate, malformed, and unknown-packet outcomes.
 - `ReleaseAll` clears all mouse buttons and keyboard keys.
 - App background or manual disconnect sends `ReleaseAll` before BLE cancellation when possible.
 - Mac profile toggles input source with `Control + Space`.
