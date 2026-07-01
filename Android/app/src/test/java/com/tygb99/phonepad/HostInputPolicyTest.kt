@@ -2,7 +2,9 @@ package com.tygb99.phonepad
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class HostInputPolicyTest {
     @Test
@@ -55,5 +57,17 @@ class HostInputPolicyTest {
         assertEquals(HostOsPreset.WINDOWS_LANG1, HostOsPreset.MAC.nextManualPreset())
         assertEquals(HostOsPreset.WINDOWS_RIGHT_ALT, HostOsPreset.WINDOWS_LANG1.nextManualPreset())
         assertEquals(HostOsPreset.AUTO, HostOsPreset.WINDOWS_RIGHT_ALT.nextManualPreset())
+    }
+
+    @Test
+    fun compactHostOsPressCyclesOnlyAtLongPressBoundary() {
+        assertFalse(HostInputPolicy.shouldCycleCompactHostOsPress(0L, alreadyCycled = false))
+        assertFalse(HostInputPolicy.shouldCycleCompactHostOsPress(999L, alreadyCycled = false))
+        assertTrue(HostInputPolicy.shouldCycleCompactHostOsPress(1000L, alreadyCycled = false))
+    }
+
+    @Test
+    fun compactHostOsPressCannotCycleTwiceForSamePress() {
+        assertFalse(HostInputPolicy.shouldCycleCompactHostOsPress(1200L, alreadyCycled = true))
     }
 }

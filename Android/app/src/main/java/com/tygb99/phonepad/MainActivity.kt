@@ -112,9 +112,23 @@ class MainActivity : Activity() {
     private var timedOutConnectionAddress: String? = null
     private var preDiscoverableBondedAddresses: Set<String> = emptySet()
     private var hidForegroundServiceRunning = false
+    private var compactHostOsDownTimeMs = 0L
+    private var compactHostOsPressCycled = false
+    private var compactHostOsPressCanceled = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
+    private val compactHostOsLongPressRunnable = Runnable {
+        if (HostInputPolicy.shouldCycleCompactHostOsPress(
+                HostInputPolicy.COMPACT_HOST_OS_LONG_PRESS_MS,
+                compactHostOsPressCycled,
+            )
+        ) {
+            compactHostOsPressCycled = true
+            compactHostOsButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            cycleHostOsPreset()
+        }
+    }
     private val scrollRepeatRunnable = object : Runnable {
         override fun run() {
             val button = activeScrollButton ?: return
@@ -568,7 +582,7 @@ class MainActivity : Activity() {
         }
     }
 
-    @SuppressLint("SetTextI18n")
+    @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
     private fun buildTouchpadPanel(): View {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -650,7 +664,59 @@ class MainActivity : Activity() {
         connectionStatusChip = statusChip()
         controlsColumn.addView(connectionStatusChip, matchWrap(bottom = 6))
 
-        compactHostOsButton = controlButton("자동", ::cycleHostOsPreset)
+        compactHostOsButton = controlButton("자동") {
+            setStatus("호스트 OS 변경 잠금: 1초 이상 길게 눌러 변경하세요.")
+        }
+        compactHostOsButton.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.isPressed = true
+                    compactHostOsDownTimeMs = event.eventTime
+                    compactHostOsPressCycled = false
+                    compactHostOsPressCanceled = false
+                    mainHandler.postDelayed(
+                        compactHostOsLongPressRunnable,
+                        HostInputPolicy.COMPACT_HOST_OS_LONG_PRESS_MS,
+                    )
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!compactHostOsPressCanceled && event.isOutside(view)) {
+                        compactHostOsPressCanceled = true
+                        mainHandler.removeCallbacks(compactHostOsLongPressRunnable)
+                        view.isPressed = false
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    mainHandler.removeCallbacks(compactHostOsLongPressRunnable)
+                    val pressDurationMs = event.eventTime - compactHostOsDownTimeMs
+                    if (!compactHostOsPressCanceled &&
+                        HostInputPolicy.shouldCycleCompactHostOsPress(pressDurationMs, compactHostOsPressCycled)
+                    ) {
+                        compactHostOsPressCycled = true
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        cycleHostOsPreset()
+                    } else if (!compactHostOsPressCanceled && !compactHostOsPressCycled) {
+                        view.performClick()
+                    }
+                    view.isPressed = false
+                    compactHostOsDownTimeMs = 0L
+                    compactHostOsPressCycled = false
+                    compactHostOsPressCanceled = false
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    mainHandler.removeCallbacks(compactHostOsLongPressRunnable)
+                    view.isPressed = false
+                    compactHostOsDownTimeMs = 0L
+                    compactHostOsPressCycled = false
+                    compactHostOsPressCanceled = false
+                    true
+                }
+                else -> true
+            }
+        }
         controlsColumn.addView(compactHostOsButton, matchWrap(bottom = 6))
 
         controlsColumn.addView(
@@ -2033,6 +2099,10 @@ class MainActivity : Activity() {
         runOnUiThread {
             statusText.text = message
         }
+    }
+
+    private fun MotionEvent.isOutside(view: View): Boolean {
+        return x < 0f || y < 0f || x > view.width || y > view.height
     }
 
     private fun sectionLabel(text: String): TextView {

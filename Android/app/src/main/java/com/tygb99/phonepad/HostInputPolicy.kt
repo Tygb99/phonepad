@@ -35,6 +35,8 @@ object KeyboardReport {
 }
 
 object HostInputPolicy {
+    const val COMPACT_HOST_OS_LONG_PRESS_MS = 1000L
+
     fun resolvePreset(savedPreset: HostOsPreset, hostName: String?): HostOsPreset {
         if (savedPreset != HostOsPreset.AUTO) return savedPreset
         val normalized = hostName.orEmpty().lowercase()
@@ -58,5 +60,9 @@ object HostInputPolicy {
             HostOsPreset.WINDOWS_LANG1 -> KeyboardStroke(0, KeyboardReport.KEY_LANG1)
             HostOsPreset.WINDOWS_RIGHT_ALT -> KeyboardStroke(KeyboardReport.MOD_RIGHT_ALT, 0)
         }
+    }
+
+    fun shouldCycleCompactHostOsPress(pressDurationMs: Long, alreadyCycled: Boolean): Boolean {
+        return !alreadyCycled && pressDurationMs >= COMPACT_HOST_OS_LONG_PRESS_MS
     }
 }
