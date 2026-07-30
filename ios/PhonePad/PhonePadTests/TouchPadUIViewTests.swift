@@ -3,6 +3,46 @@ import XCTest
 @testable import PhonePad
 
 final class TouchPadUIViewTests: XCTestCase {
+    @MainActor
+    func testContinuousScrollRepeaterSendsInitialThenRepeatsUntilStopped() async throws {
+        let repeater = ContinuousScrollRepeater(
+            initialDelayNanoseconds: 20_000_000,
+            repeatIntervalNanoseconds: 15_000_000
+        )
+        var amounts: [Int8] = []
+
+        repeater.start(initialAmount: 2, repeatAmount: 1) { amount in
+            amounts.append(amount)
+        }
+
+        XCTAssertEqual(amounts, [2])
+        try await Task.sleep(nanoseconds: 70_000_000)
+        XCTAssertGreaterThanOrEqual(amounts.count, 3)
+        XCTAssertTrue(amounts.dropFirst().allSatisfy { $0 == 1 })
+
+        repeater.stop()
+        let stoppedCount = amounts.count
+        try await Task.sleep(nanoseconds: 40_000_000)
+        XCTAssertEqual(amounts.count, stoppedCount)
+    }
+
+    @MainActor
+    func testContinuousScrollRepeaterStopsBeforeFirstRepeat() async throws {
+        let repeater = ContinuousScrollRepeater(
+            initialDelayNanoseconds: 30_000_000,
+            repeatIntervalNanoseconds: 15_000_000
+        )
+        var amounts: [Int8] = []
+
+        repeater.start(initialAmount: -2, repeatAmount: -1) { amount in
+            amounts.append(amount)
+        }
+        repeater.stop()
+
+        try await Task.sleep(nanoseconds: 60_000_000)
+        XCTAssertEqual(amounts, [-2])
+    }
+
     func testExternalButtonAndOneLocalTouchRoutesMovementToPointer() {
         let touchPad = TouchPadUIView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
         let externalButton = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 40))

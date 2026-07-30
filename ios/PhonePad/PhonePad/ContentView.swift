@@ -3,7 +3,9 @@ import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var mouseController: BLEMouseController
+    @State private var pointerSensitivity = 1.0
     @State private var scrollSensitivity = 1.0
+    @State private var scrollRepeater = ContinuousScrollRepeater()
     @State private var isKeyboardPresented = false
 
     var body: some View {
@@ -102,7 +104,10 @@ struct ContentView: View {
         TouchPadView(
             scrollSensitivity: scrollSensitivity,
             onMove: { dx, dy in
-                mouseController.move(dx: dx, dy: dy)
+                mouseController.move(
+                    dx: dx * pointerSensitivity,
+                    dy: dy * pointerSensitivity
+                )
             },
             onScroll: { amount in
                 mouseController.wheel(amount)
@@ -155,35 +160,32 @@ struct ContentView: View {
                     .font(.callout.weight(.medium))
                     .frame(width: 52, alignment: .leading)
 
-                Button {
-                    mouseController.wheel(1)
-                } label: {
-                    Label("Up", systemImage: "arrow.up")
-                        .font(.callout.weight(.medium))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                ScrollHoldButton(
+                    title: "Up",
+                    systemImage: "arrow.up",
+                    initialAmount: 2,
+                    repeatAmount: 1,
+                    repeater: scrollRepeater
+                ) { amount in
+                    mouseController.wheel(amount)
                 }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Scroll Up")
 
-                Button {
-                    mouseController.wheel(-1)
-                } label: {
-                    Label("Down", systemImage: "arrow.down")
-                        .font(.callout.weight(.medium))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                ScrollHoldButton(
+                    title: "Down",
+                    systemImage: "arrow.down",
+                    initialAmount: -2,
+                    repeatAmount: -1,
+                    repeater: scrollRepeater
+                ) { amount in
+                    mouseController.wheel(amount)
                 }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Scroll Down")
             }
         }
     }
 
     private var settings: some View {
         VStack(spacing: 12) {
+            SpeedSliderRow(title: "Pointer Speed", value: $pointerSensitivity, range: 0.25...3.0)
             SliderRow(title: "Scroll", value: $scrollSensitivity, range: 0.25...3.0)
         }
         .padding()
@@ -430,6 +432,132 @@ private struct TextKeyboardCaptureView: UIViewRepresentable {
 
             textView.text = " "
             return false
+        }
+    }
+}
+
+
+@MainActor
+final class ContinuousScrollRepeater {
+    private let initialDelayNanoseconds: UInt64
+    private let repeatIntervalNanoseconds: UInt64
+    private var repeatTask: Task<Void, Never>?
+
+    init(
+        initialDelayNanoseconds: UInt64 = 260_000_000,
+        repeatIntervalNanoseconds: UInt64 = 135_000_000
+    ) {
+        self.initialDelayNanoseconds = initialDelayNanoseconds
+        self.repeatIntervalNanoseconds = repeatIntervalNanoseconds
+    }
+
+    func start(initialAmount: Int8, repeatAmount: Int8, action: @escaping (Int8) -> Void) {
+        stop()
+        action(initialAmount)
+
+        let initialDelayNanoseconds = initialDelayNanoseconds
+        let repeatIntervalNanoseconds = repeatIntervalNanoseconds
+        repeatTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: initialDelayNanoseconds)
+                while !Task.isCancelled {
+                    action(repeatAmount)
+                    try await Task.sleep(nanoseconds: repeatIntervalNanoseconds)
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    func stop() {
+        repeatTask?.cancel()
+        repeatTask = nil
+    }
+
+    deinit {
+        repeatTask?.cancel()
+    }
+}
+
+private struct ScrollHoldButton: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isPressed = false
+
+    let title: String
+    let systemImage: String
+    let initialAmount: Int8
+    let repeatAmount: Int8
+    let repeater: ContinuousScrollRepeater
+    let onScroll: (Int8) -> Void
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.medium))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(Color.accentColor)
+            .background(isPressed ? Color.accentColor.opacity(0.18) : Color(.tertiarySystemFill))
+            .clipShape(Capsule())
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !isPressed else { return }
+                        isPressed = true
+                        repeater.start(
+                            initialAmount: initialAmount,
+                            repeatAmount: repeatAmount,
+                            action: onScroll
+                        )
+                    }
+                    .onEnded { _ in
+                        stopScrolling()
+                    }
+            )
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Scroll \(title)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            onScroll(initialAmount)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active {
+                stopScrolling()
+            }
+        }
+        .onDisappear {
+            stopScrolling()
+        }
+    }
+
+    private func stopScrolling() {
+        isPressed = false
+        repeater.stop()
+    }
+}
+
+private struct SpeedSliderRow: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.callout.weight(.medium))
+
+            Slider(value: $value, in: range, step: 0.05)
+
+            HStack {
+                Text("Slow")
+                Spacer()
+                Text("Fast")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 }
