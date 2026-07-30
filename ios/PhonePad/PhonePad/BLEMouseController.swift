@@ -103,10 +103,10 @@ final class BLEMouseController: NSObject, ObservableObject {
         scan()
     }
 
-    func move(dx: Double, dy: Double, sensitivity: Double) {
+    func move(dx: Double, dy: Double) {
         sendPacket(
-            dx: Self.clampInt8(dx * sensitivity),
-            dy: Self.clampInt8(dy * sensitivity),
+            dx: Self.clampInt8(dx),
+            dy: Self.clampInt8(dy),
             buttons: currentButtons,
             wheel: 0
         )

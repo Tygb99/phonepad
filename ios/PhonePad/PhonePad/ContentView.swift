@@ -3,7 +3,6 @@ import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var mouseController: BLEMouseController
-    @State private var pointerSensitivity = 1.2
     @State private var scrollSensitivity = 1.0
     @State private var isKeyboardPresented = false
 
@@ -101,10 +100,9 @@ struct ContentView: View {
 
     private var touchSurface: some View {
         TouchPadView(
-            pointerSensitivity: pointerSensitivity,
             scrollSensitivity: scrollSensitivity,
             onMove: { dx, dy in
-                mouseController.move(dx: dx, dy: dy, sensitivity: pointerSensitivity)
+                mouseController.move(dx: dx, dy: dy)
             },
             onScroll: { amount in
                 mouseController.wheel(amount)
@@ -145,16 +143,47 @@ struct ContentView: View {
     }
 
     private var buttonGrid: some View {
-        HStack(spacing: 10) {
-            MouseButtonView(title: "Left", systemImage: "cursorarrow.click", button: .left)
-            MouseButtonView(title: "Middle", systemImage: "circle", button: .middle)
-            MouseButtonView(title: "Right", systemImage: "contextualmenu.and.cursorarrow", button: .right)
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                MouseButtonView(title: "Left", systemImage: "cursorarrow.click", button: .left)
+                MouseButtonView(title: "Middle", systemImage: "circle", button: .middle)
+                MouseButtonView(title: "Right", systemImage: "contextualmenu.and.cursorarrow", button: .right)
+            }
+
+            HStack(spacing: 10) {
+                Text("Scroll")
+                    .font(.callout.weight(.medium))
+                    .frame(width: 52, alignment: .leading)
+
+                Button {
+                    mouseController.wheel(1)
+                } label: {
+                    Label("Up", systemImage: "arrow.up")
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Scroll Up")
+
+                Button {
+                    mouseController.wheel(-1)
+                } label: {
+                    Label("Down", systemImage: "arrow.down")
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Scroll Down")
+            }
         }
     }
 
     private var settings: some View {
         VStack(spacing: 12) {
-            SliderRow(title: "Pointer", value: $pointerSensitivity, range: 0.25...3.0)
             SliderRow(title: "Scroll", value: $scrollSensitivity, range: 0.25...3.0)
         }
         .padding()
@@ -518,7 +547,6 @@ private struct MouseButtonView: View {
 }
 
 private struct TouchPadView: UIViewRepresentable {
-    let pointerSensitivity: Double
     let scrollSensitivity: Double
     let onMove: (Double, Double) -> Void
     let onScroll: (Int8) -> Void
@@ -547,7 +575,7 @@ private struct TouchPadView: UIViewRepresentable {
     }
 }
 
-private final class TouchPadUIView: UIView {
+final class TouchPadUIView: UIView {
     var onMove: ((Double, Double) -> Void)?
     var onScroll: ((Int8) -> Void)?
     var onTap: (() -> Void)?
@@ -567,10 +595,8 @@ private final class TouchPadUIView: UIView {
     private var touchStartCount = 0
     private var touchStartTime = CACurrentMediaTime()
     private var lastMoveTime = CACurrentMediaTime()
-    private var velocity = CGPoint.zero
     private var scrollVelocity = 0.0
     private var scrollRemainder = 0.0
-    private var inertiaLink: CADisplayLink?
     private var scrollInertiaLink: CADisplayLink?
     private var lastTapTime = 0.0
     private var pendingSingleTap: DispatchWorkItem?
@@ -588,36 +614,37 @@ private final class TouchPadUIView: UIView {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        stopInertia()
         stopScrollInertia()
 
-        guard let event, let centroid = centroid(for: event.allTouches ?? touches) else { return }
-        touchStartCount = event.allTouches?.count ?? touches.count
+        guard let event else { return }
+        let localTouches = event.touches(for: self) ?? touches
+        guard let centroid = centroid(for: localTouches) else { return }
+        touchStartCount = localTouches.count
         mode = touchStartCount >= 2 ? .scroll : .pointer
         lastCentroid = centroid
         startPoint = centroid
         touchStartTime = CACurrentMediaTime()
         lastMoveTime = touchStartTime
-        velocity = .zero
         scrollVelocity = 0
         scrollRemainder = 0
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let event, let centroid = centroid(for: event.allTouches ?? touches), let lastCentroid else { return }
+        guard let event else { return }
+        let localTouches = event.touches(for: self) ?? touches
+        guard let centroid = centroid(for: localTouches), let lastCentroid else { return }
 
         let now = CACurrentMediaTime()
         let dt = max(0.001, now - lastMoveTime)
         let dx = centroid.x - lastCentroid.x
         let dy = centroid.y - lastCentroid.y
 
-        if (event.allTouches?.count ?? touches.count) >= 2 {
+        if localTouches.count >= 2 {
             mode = .scroll
             scroll(by: (-dy / 10.0) * scrollSensitivity)
             scrollVelocity = (-Double(dy) / dt / 7.5) * scrollSensitivity
         } else if mode == .pointer {
             onMove?(dx, dy)
-            velocity = CGPoint(x: dx / dt, y: dy / dt)
         }
 
         self.lastCentroid = centroid
@@ -625,13 +652,12 @@ private final class TouchPadUIView: UIView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        let allTouchesEnded = event?.allTouches?.allSatisfy { $0.phase == .ended || $0.phase == .cancelled } ?? true
+        let localTouches = event?.touches(for: self) ?? touches
+        let allTouchesEnded = localTouches.allSatisfy { $0.phase == .ended || $0.phase == .cancelled }
         guard allTouchesEnded else { return }
 
         if mode == .pointer, isTapCandidate() {
             handleTap()
-        } else if mode == .pointer {
-            startInertiaIfNeeded()
         } else if mode == .scroll {
             if touchStartCount >= 2, isTapCandidate() {
                 onTwoFingerTap?()
@@ -651,7 +677,6 @@ private final class TouchPadUIView: UIView {
         lastCentroid = nil
         startPoint = nil
         touchStartCount = 0
-        stopInertia()
         stopScrollInertia()
     }
 
@@ -689,33 +714,6 @@ private final class TouchPadUIView: UIView {
         }
         pendingSingleTap = tap
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24, execute: tap)
-    }
-
-    private func startInertiaIfNeeded() {
-        let speed = hypot(velocity.x, velocity.y)
-        guard speed > 320 else { return }
-
-        inertiaLink = CADisplayLink(target: self, selector: #selector(stepInertia))
-        inertiaLink?.add(to: .main, forMode: .common)
-    }
-
-    @objc private func stepInertia(_ link: CADisplayLink) {
-        let dt = min(link.duration, 1.0 / 30.0)
-        let dx = Double(velocity.x * dt)
-        let dy = Double(velocity.y * dt)
-
-        onMove?(dx, dy)
-        velocity.x *= 0.90
-        velocity.y *= 0.90
-
-        if hypot(velocity.x, velocity.y) < 18 {
-            stopInertia()
-        }
-    }
-
-    private func stopInertia() {
-        inertiaLink?.invalidate()
-        inertiaLink = nil
     }
 
     private func scroll(by amount: Double) {
