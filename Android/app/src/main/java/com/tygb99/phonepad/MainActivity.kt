@@ -471,7 +471,11 @@ class MainActivity : Activity() {
         }
         connectionDrawer.addView(
             connectionPanel,
-            FrameLayout.LayoutParams(dp(430), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START),
+            FrameLayout.LayoutParams(
+                clampedPanelWidth(preferredDp = 430, maxWidthFraction = 0.85f),
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.START,
+            ),
         )
         root.addView(
             connectionDrawer,
@@ -758,9 +762,23 @@ class MainActivity : Activity() {
         scrollSpeedButton = controlButton("", ::cycleScrollSpeed)
         controlsColumn.addView(buttonRow(doubleTapDragButton, scrollSpeedButton), matchWrap())
 
+        val controlsScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(
+                controlsColumn,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
         panel.addView(
-            controlsColumn,
-            LinearLayout.LayoutParams(dp(300), ViewGroup.LayoutParams.MATCH_PARENT),
+            controlsScroll,
+            LinearLayout.LayoutParams(
+                clampedPanelWidth(preferredDp = 300, maxWidthFraction = 0.44f),
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
         )
 
         return panel
@@ -2229,6 +2247,14 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+
+    // 화면 확대(디스플레이 밀도) 설정이 커져도 고정 dp 패널이 화면을 넘지 않도록
+    // 실제 화면 폭 대비 상한을 함께 적용한다.
+    private fun clampedPanelWidth(preferredDp: Int, maxWidthFraction: Float): Int {
+        val metrics = resources.displayMetrics
+        val maxPx = (maxOf(metrics.widthPixels, metrics.heightPixels) * maxWidthFraction).roundToInt()
+        return minOf(dp(preferredDp), maxPx)
+    }
 
     companion object {
         private const val NEARBY_DEVICES_REQUEST = 4028
