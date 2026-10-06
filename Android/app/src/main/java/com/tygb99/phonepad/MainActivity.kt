@@ -654,21 +654,35 @@ class MainActivity : Activity() {
         }
         fun controlButton(text: String, onClick: () -> Unit): Button {
             return actionButton(text, onClick).apply {
-                minHeight = dp(40)
-                minimumHeight = dp(40)
+                minHeight = 0
+                minimumHeight = 0
                 setPadding(dp(4), 0, dp(4), 0)
             }
         }
         fun controlScrollButton(text: String, direction: Int): Button {
             return scrollButton(text, direction).apply {
-                minHeight = dp(40)
-                minimumHeight = dp(40)
+                minHeight = 0
+                minimumHeight = 0
                 setPadding(dp(4), 0, dp(4), 0)
             }
         }
+        // 화면 확대(밀도)와 무관하게 모든 줄이 패널 높이 안에 들어오도록 줄마다 남은 높이를 균등 분배한다.
+        fun fillRow(bottom: Int = 6): LinearLayout.LayoutParams {
+            return LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                bottomMargin = dp(bottom)
+            }
+        }
+        fun controlRow(vararg buttons: Button): LinearLayout {
+            return buttonRow(*buttons).apply {
+                buttons.forEach { it.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT }
+            }
+        }
 
-        connectionStatusChip = statusChip()
-        controlsColumn.addView(connectionStatusChip, matchWrap(bottom = 6))
+        connectionStatusChip = statusChip().apply {
+            minHeight = 0
+            minimumHeight = 0
+        }
+        controlsColumn.addView(connectionStatusChip, fillRow())
 
         compactHostOsButton = controlButton("자동") {
             setStatus("호스트 OS 변경 잠금: 1초 이상 길게 눌러 변경하세요.")
@@ -723,58 +737,47 @@ class MainActivity : Activity() {
                 else -> true
             }
         }
-        controlsColumn.addView(compactHostOsButton, matchWrap(bottom = 6))
+        controlsColumn.addView(compactHostOsButton, fillRow())
 
         controlsColumn.addView(
-            buttonRow(
+            controlRow(
                 controlButton("한영", ::sendLanguageToggle).also { languageToggleButton = it },
                 controlButton("연결", ::showConnectionPanel).also { connectionDrawerButton = it },
             ),
-            matchWrap(bottom = 6),
+            fillRow(),
         )
 
         controlsColumn.addView(
-            buttonRow(
+            controlRow(
                 controlButton("왼쪽 클릭") { clickMouse(LEFT_BUTTON) },
                 controlButton("오른쪽 클릭") { clickMouse(RIGHT_BUTTON) },
             ),
-            matchWrap(bottom = 6),
+            fillRow(),
         )
 
         controlsColumn.addView(
-            buttonRow(
+            controlRow(
                 controlScrollButton("스크롤 ↑", SCROLL_UP),
                 controlScrollButton("스크롤 ↓", SCROLL_DOWN),
             ),
-            matchWrap(bottom = 6),
+            fillRow(),
         )
 
         dragButton = controlButton("Drag", ::toggleDragMode)
         controlsColumn.addView(
-            buttonRow(
+            controlRow(
                 controlButton("테스트 이동") { sendMouseReport(35, 0, currentButtons(), 0, 0) },
                 dragButton,
             ),
-            matchWrap(bottom = 6),
+            fillRow(),
         )
 
         doubleTapDragButton = controlButton("", ::toggleDoubleTapDrag)
         scrollSpeedButton = controlButton("", ::cycleScrollSpeed)
-        controlsColumn.addView(buttonRow(doubleTapDragButton, scrollSpeedButton), matchWrap())
+        controlsColumn.addView(controlRow(doubleTapDragButton, scrollSpeedButton), fillRow(bottom = 0))
 
-        val controlsScroll = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(
-                controlsColumn,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
-            )
-        }
         panel.addView(
-            controlsScroll,
+            controlsColumn,
             LinearLayout.LayoutParams(
                 clampedPanelWidth(preferredDp = 300, maxWidthFraction = 0.44f),
                 ViewGroup.LayoutParams.MATCH_PARENT,
