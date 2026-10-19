@@ -719,11 +719,12 @@ final class TouchPadUIView: UIView {
 
     private var mode = Mode.none
     private var lastCentroid: CGPoint?
-    private var startPoint: CGPoint?
+    private var tapTravel: CGVector?
     private var touchStartCount = 0
     private var touchStartTime = CACurrentMediaTime()
     private var lastMoveTime = CACurrentMediaTime()
     private var scrollVelocity = 0.0
+    private var lastScrollMoveTime = 0.0
     private var scrollRemainder = 0.0
     private var scrollInertiaLink: CADisplayLink?
     private var lastTapTime = 0.0
@@ -750,7 +751,7 @@ final class TouchPadUIView: UIView {
         touchStartCount = localTouches.count
         mode = touchStartCount >= 2 ? .scroll : .pointer
         lastCentroid = centroid
-        startPoint = centroid
+        tapTravel = .zero
         touchStartTime = CACurrentMediaTime()
         lastMoveTime = touchStartTime
         scrollVelocity = 0
@@ -773,10 +774,13 @@ final class TouchPadUIView: UIView {
             mode = .scroll
             scroll(by: (-dy / 10.0) * scrollSensitivity)
             scrollVelocity = (-Double(dy) / dt / 7.5) * scrollSensitivity
+            lastScrollMoveTime = now
         } else if mode == .pointer {
             onMove?(dx, dy)
         }
 
+        tapTravel?.dx += dx
+        tapTravel?.dy += dy
         self.lastCentroid = centroid
         lastMoveTime = now
     }
@@ -788,7 +792,6 @@ final class TouchPadUIView: UIView {
             lastCentroid = centroid(for: localTouches.filter {
                 $0.phase != .ended && $0.phase != .cancelled
             })
-            scrollVelocity = 0
             scrollRemainder = 0
             lastMoveTime = CACurrentMediaTime()
             return
@@ -806,14 +809,14 @@ final class TouchPadUIView: UIView {
 
         mode = .none
         lastCentroid = nil
-        startPoint = nil
+        tapTravel = nil
         touchStartCount = 0
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         mode = .none
         lastCentroid = nil
-        startPoint = nil
+        tapTravel = nil
         touchStartCount = 0
         stopScrollInertia()
     }
@@ -828,9 +831,9 @@ final class TouchPadUIView: UIView {
     }
 
     private func isTapCandidate() -> Bool {
-        guard let startPoint, let lastCentroid else { return false }
+        guard let tapTravel else { return false }
 
-        let distance = hypot(lastCentroid.x - startPoint.x, lastCentroid.y - startPoint.y)
+        let distance = hypot(tapTravel.dx, tapTravel.dy)
         let duration = CACurrentMediaTime() - touchStartTime
         return distance < 12 && duration < 0.28
     }
@@ -865,7 +868,7 @@ final class TouchPadUIView: UIView {
     }
 
     private func startScrollInertiaIfNeeded() {
-        guard abs(scrollVelocity) > 7 else { return }
+        guard abs(scrollVelocity) > 7, CACurrentMediaTime() - lastScrollMoveTime < 0.15 else { return }
 
         scrollInertiaLink = CADisplayLink(target: self, selector: #selector(stepScrollInertia))
         scrollInertiaLink?.add(to: .main, forMode: .common)

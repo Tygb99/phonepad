@@ -25,6 +25,89 @@ final class TouchPadUIViewTests: XCTestCase {
         touchPad.touchesCancelled([second], with: event)
     }
 
+    func testStaggeredLiftAfterTwoFingerScrollKeepsInertia() {
+        let touchPad = TouchPadUIView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let first = FakeTouch(phase: .began, location: CGPoint(x: 20, y: 20))
+        let second = FakeTouch(phase: .began, location: CGPoint(x: 40, y: 20))
+        let event = FakeEvent(
+            allTouches: [first, second],
+            touchesByView: [ObjectIdentifier(touchPad): [first, second]]
+        )
+        touchPad.touchesBegan([first, second], with: event)
+        first.fakePhase = .moved
+        second.fakePhase = .moved
+        first.fakeLocation = CGPoint(x: 20, y: 60)
+        second.fakeLocation = CGPoint(x: 40, y: 60)
+        touchPad.touchesMoved([first, second], with: event)
+
+        let inertia = expectation(description: "Staggered lift still starts inertial scrolling")
+        inertia.assertForOverFulfill = false
+        touchPad.onScroll = { _ in inertia.fulfill() }
+        first.fakePhase = .ended
+        second.fakePhase = .stationary
+        touchPad.touchesEnded([first], with: event)
+        second.fakePhase = .ended
+        touchPad.touchesEnded([second], with: event)
+
+        wait(for: [inertia], timeout: 0.5)
+        touchPad.onScroll = nil
+        touchPad.touchesCancelled([first, second], with: event)
+    }
+
+    func testHeldRemainingFingerDropsStaleScrollVelocity() {
+        let touchPad = TouchPadUIView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let first = FakeTouch(phase: .began, location: CGPoint(x: 20, y: 20))
+        let second = FakeTouch(phase: .began, location: CGPoint(x: 40, y: 20))
+        let event = FakeEvent(
+            allTouches: [first, second],
+            touchesByView: [ObjectIdentifier(touchPad): [first, second]]
+        )
+        touchPad.touchesBegan([first, second], with: event)
+        first.fakePhase = .moved
+        second.fakePhase = .moved
+        first.fakeLocation = CGPoint(x: 20, y: 60)
+        second.fakeLocation = CGPoint(x: 40, y: 60)
+        touchPad.touchesMoved([first, second], with: event)
+        first.fakePhase = .ended
+        second.fakePhase = .stationary
+        touchPad.touchesEnded([first], with: event)
+
+        // The remaining finger is held still; elapsed time is the behavior under test.
+        let held = expectation(description: "Remaining finger stays down")
+        held.isInverted = true
+        wait(for: [held], timeout: 0.3)
+
+        let staleInertia = expectation(description: "Stale velocity must not resume scrolling")
+        staleInertia.isInverted = true
+        touchPad.onScroll = { _ in staleInertia.fulfill() }
+        second.fakePhase = .ended
+        touchPad.touchesEnded([second], with: event)
+
+        wait(for: [staleInertia], timeout: 0.2)
+        touchPad.touchesCancelled([first, second], with: event)
+    }
+
+    func testWideTwoFingerTapWithStaggeredLiftEmitsTap() {
+        let touchPad = TouchPadUIView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let first = FakeTouch(phase: .began, location: CGPoint(x: 40, y: 20))
+        let second = FakeTouch(phase: .began, location: CGPoint(x: 160, y: 20))
+        let event = FakeEvent(
+            allTouches: [first, second],
+            touchesByView: [ObjectIdentifier(touchPad): [first, second]]
+        )
+        let tapped = expectation(description: "Wide two-finger tap survives staggered lift")
+        touchPad.onTwoFingerTap = { tapped.fulfill() }
+
+        touchPad.touchesBegan([first, second], with: event)
+        first.fakePhase = .ended
+        second.fakePhase = .stationary
+        touchPad.touchesEnded([first], with: event)
+        second.fakePhase = .ended
+        touchPad.touchesEnded([second], with: event)
+
+        wait(for: [tapped], timeout: 0.1)
+    }
+
     @MainActor
     func testContinuousScrollRepeaterSendsInitialThenRepeatsUntilStopped() async throws {
         let repeater = ContinuousScrollRepeater(
