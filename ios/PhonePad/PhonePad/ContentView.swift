@@ -719,7 +719,7 @@ final class TouchPadUIView: UIView {
 
     private var mode = Mode.none
     private var lastCentroid: CGPoint?
-    private var startPoint: CGPoint?
+    private var tapTravel: CGVector?
     private var touchStartCount = 0
     private var touchStartTime = CACurrentMediaTime()
     private var lastMoveTime = CACurrentMediaTime()
@@ -750,7 +750,7 @@ final class TouchPadUIView: UIView {
         touchStartCount = localTouches.count
         mode = touchStartCount >= 2 ? .scroll : .pointer
         lastCentroid = centroid
-        startPoint = centroid
+        tapTravel = .zero
         touchStartTime = CACurrentMediaTime()
         lastMoveTime = touchStartTime
         scrollVelocity = 0
@@ -777,6 +777,8 @@ final class TouchPadUIView: UIView {
             onMove?(dx, dy)
         }
 
+        tapTravel?.dx += dx
+        tapTravel?.dy += dy
         self.lastCentroid = centroid
         lastMoveTime = now
     }
@@ -788,7 +790,6 @@ final class TouchPadUIView: UIView {
             lastCentroid = centroid(for: localTouches.filter {
                 $0.phase != .ended && $0.phase != .cancelled
             })
-            scrollVelocity = 0
             scrollRemainder = 0
             lastMoveTime = CACurrentMediaTime()
             return
@@ -806,14 +807,14 @@ final class TouchPadUIView: UIView {
 
         mode = .none
         lastCentroid = nil
-        startPoint = nil
+        tapTravel = nil
         touchStartCount = 0
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         mode = .none
         lastCentroid = nil
-        startPoint = nil
+        tapTravel = nil
         touchStartCount = 0
         stopScrollInertia()
     }
@@ -828,9 +829,9 @@ final class TouchPadUIView: UIView {
     }
 
     private func isTapCandidate() -> Bool {
-        guard let startPoint, let lastCentroid else { return false }
+        guard let tapTravel else { return false }
 
-        let distance = hypot(lastCentroid.x - startPoint.x, lastCentroid.y - startPoint.y)
+        let distance = hypot(tapTravel.dx, tapTravel.dy)
         let duration = CACurrentMediaTime() - touchStartTime
         return distance < 12 && duration < 0.28
     }
