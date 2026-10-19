@@ -7,7 +7,13 @@ on:
       - "codex/**"
     tags:
       - "v*"
+    paths:
+      - "Android/**"
+      - ".github/workflows/android-apk.yml"
   pull_request:
+    paths:
+      - "Android/**"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
