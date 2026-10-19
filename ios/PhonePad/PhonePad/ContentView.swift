@@ -759,7 +759,9 @@ final class TouchPadUIView: UIView {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let event else { return }
-        let localTouches = event.touches(for: self) ?? touches
+        let localTouches = (event.touches(for: self) ?? touches).filter {
+            $0.phase != .ended && $0.phase != .cancelled
+        }
         guard let centroid = centroid(for: localTouches), let lastCentroid else { return }
 
         let now = CACurrentMediaTime()
@@ -782,7 +784,15 @@ final class TouchPadUIView: UIView {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         let localTouches = event?.touches(for: self) ?? touches
         let allTouchesEnded = localTouches.allSatisfy { $0.phase == .ended || $0.phase == .cancelled }
-        guard allTouchesEnded else { return }
+        guard allTouchesEnded else {
+            lastCentroid = centroid(for: localTouches.filter {
+                $0.phase != .ended && $0.phase != .cancelled
+            })
+            scrollVelocity = 0
+            scrollRemainder = 0
+            lastMoveTime = CACurrentMediaTime()
+            return
+        }
 
         if mode == .pointer, isTapCandidate() {
             handleTap()
