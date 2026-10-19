@@ -724,6 +724,7 @@ final class TouchPadUIView: UIView {
     private var touchStartTime = CACurrentMediaTime()
     private var lastMoveTime = CACurrentMediaTime()
     private var scrollVelocity = 0.0
+    private var lastScrollMoveTime = 0.0
     private var scrollRemainder = 0.0
     private var scrollInertiaLink: CADisplayLink?
     private var lastTapTime = 0.0
@@ -773,6 +774,7 @@ final class TouchPadUIView: UIView {
             mode = .scroll
             scroll(by: (-dy / 10.0) * scrollSensitivity)
             scrollVelocity = (-Double(dy) / dt / 7.5) * scrollSensitivity
+            lastScrollMoveTime = now
         } else if mode == .pointer {
             onMove?(dx, dy)
         }
@@ -866,7 +868,7 @@ final class TouchPadUIView: UIView {
     }
 
     private func startScrollInertiaIfNeeded() {
-        guard abs(scrollVelocity) > 7 else { return }
+        guard abs(scrollVelocity) > 7, CACurrentMediaTime() - lastScrollMoveTime < 0.15 else { return }
 
         scrollInertiaLink = CADisplayLink(target: self, selector: #selector(stepScrollInertia))
         scrollInertiaLink?.add(to: .main, forMode: .common)
