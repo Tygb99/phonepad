@@ -40,11 +40,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build and lint
+      - name: Test, build and lint
         run: |
           cd Android
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug :app:lintDebug --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --stacktrace
 
       - name: Verify no INTERNET permission
         run: |
