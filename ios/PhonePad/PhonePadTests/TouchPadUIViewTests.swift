@@ -3,6 +3,28 @@ import XCTest
 @testable import PhonePad
 
 final class TouchPadUIViewTests: XCTestCase {
+    func testEndedTouchDoesNotMoveScrollCentroid() {
+        let touchPad = TouchPadUIView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let first = FakeTouch(phase: .began, location: CGPoint(x: 20, y: 20))
+        let second = FakeTouch(phase: .began, location: CGPoint(x: 180, y: 20))
+        let event = FakeEvent(
+            allTouches: [first, second],
+            touchesByView: [ObjectIdentifier(touchPad): [first, second]]
+        )
+        var scrolls: [Int8] = []
+        touchPad.onScroll = { scrolls.append($0) }
+        touchPad.touchesBegan([first, second], with: event)
+
+        first.fakePhase = .ended
+        touchPad.touchesEnded([first], with: event)
+        first.fakeLocation = CGPoint(x: 20, y: 180)
+        second.fakePhase = .moved
+        touchPad.touchesMoved([second], with: event)
+
+        XCTAssertEqual(scrolls, [], "A lifted finger must not produce phantom scrolling")
+        touchPad.touchesCancelled([second], with: event)
+    }
+
     @MainActor
     func testContinuousScrollRepeaterSendsInitialThenRepeatsUntilStopped() async throws {
         let repeater = ContinuousScrollRepeater(
