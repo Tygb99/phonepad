@@ -82,7 +82,8 @@ Pass criteria:
 - Bluetooth on: HID session registers and host candidates remain visible.
 - Background while connected: active mouse buttons are released and the HID session remains alive.
 - Windows 11: language toggle sends LANG1 by default, or Right Alt when that preset is selected.
-- macOS: language toggle sends the staged Control + Space chord.
+- macOS: language toggle sends the staged Control + Space chord, or Right Option alone (the same HID Right Alt signal, for the Araso input method) when that preset is selected.
+- Language toggle count: each sent toggle adds one to `language_toggle_counts` by date and preset, shown in the report box for the last 7 days.
 - Manifest: `INTERNET` permission remains absent.
 
 ## Release Gate Checklist

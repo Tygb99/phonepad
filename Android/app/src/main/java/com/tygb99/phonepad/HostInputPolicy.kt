@@ -3,13 +3,15 @@ package com.tygb99.phonepad
 enum class HostOsPreset(val storageValue: String, val label: String, val shortLabel: String) {
     AUTO("auto", "자동 추정", "자동"),
     MAC("mac", "Mac: Control + Space", "Mac"),
+    MAC_RIGHT_OPTION("mac_right_option", "Mac: 오른쪽 Option 단독 (Araso)", "Mac Opt"),
     WINDOWS_LANG1("windows_lang1", "Windows: 한/영 키", "Win 한/영"),
     WINDOWS_RIGHT_ALT("windows_right_alt", "Windows: 오른쪽 Alt", "Win Alt");
 
     fun nextManualPreset(): HostOsPreset {
         return when (this) {
             AUTO -> MAC
-            MAC -> WINDOWS_LANG1
+            MAC -> MAC_RIGHT_OPTION
+            MAC_RIGHT_OPTION -> WINDOWS_LANG1
             WINDOWS_LANG1 -> WINDOWS_RIGHT_ALT
             WINDOWS_RIGHT_ALT -> AUTO
         }
@@ -58,6 +60,8 @@ object HostInputPolicy {
             HostOsPreset.AUTO -> null
             HostOsPreset.MAC -> KeyboardStroke(KeyboardReport.MOD_LEFT_CONTROL, KeyboardReport.KEY_SPACE)
             HostOsPreset.WINDOWS_LANG1 -> KeyboardStroke(0, KeyboardReport.KEY_LANG1)
+            // Mac의 오른쪽 Option은 HID Right Alt와 같은 신호다. Araso 입력기의 기본 고치기 키.
+            HostOsPreset.MAC_RIGHT_OPTION,
             HostOsPreset.WINDOWS_RIGHT_ALT -> KeyboardStroke(KeyboardReport.MOD_RIGHT_ALT, 0)
         }
     }

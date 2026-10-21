@@ -38,6 +38,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.time.LocalDate
 import java.util.Locale
 import java.util.concurrent.Executor
 import kotlin.math.abs
@@ -1636,12 +1637,28 @@ class MainActivity : Activity() {
         }
         val ok = sendKeyboardStroke(stroke, "language_toggle preset=${preset.storageValue}")
         if (ok) {
+            countLanguageToggle(preset)
             trackpadSurface.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             setStatus(languageToggleSentStatus(preset))
         } else {
             setStatus("한영 전환 키 전송에 실패했습니다. 호스트 연결을 확인하세요.")
         }
         refreshControls()
+    }
+
+    private fun countLanguageToggle(preset: HostOsPreset) {
+        val prefs = getSharedPreferences(LanguageToggleTally.PREFS_NAME, MODE_PRIVATE)
+        val key = LanguageToggleTally.key(LocalDate.now(), preset)
+        val count = prefs.getInt(key, 0) + 1
+        prefs.edit().putInt(key, count).apply()
+        Log.i(LOG_TAG, "language_toggle_count $key=$count")
+    }
+
+    private fun languageToggleLines(): List<String> {
+        val counts = getSharedPreferences(LanguageToggleTally.PREFS_NAME, MODE_PRIVATE).all
+            .mapNotNull { (key, value) -> (value as? Int)?.let { key to it } }
+            .toMap()
+        return LanguageToggleTally.recentLines(counts, LocalDate.now())
     }
 
     private fun languageToggleSentStatus(preset: HostOsPreset): String {
@@ -1913,6 +1930,9 @@ class MainActivity : Activity() {
         return buildString {
             appendLine("전송 성공: $sentReportCount")
             appendLine("전송 실패: $failedReportCount")
+            val toggleLines = languageToggleLines()
+            appendLine("한영 누름(최근 ${LanguageToggleTally.RECENT_DAYS}일): ${if (toggleLines.isEmpty()) "없음" else ""}")
+            toggleLines.forEach { appendLine("  $it") }
             append("마지막: $lastReportSummary")
         }
     }

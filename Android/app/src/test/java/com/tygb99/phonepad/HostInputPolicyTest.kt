@@ -38,6 +38,15 @@ class HostInputPolicyTest {
     }
 
     @Test
+    fun macRightOptionSendsSameRightAltSignal() {
+        assertEquals(
+            KeyboardStroke(KeyboardReport.MOD_RIGHT_ALT, 0),
+            HostInputPolicy.languageToggleStroke(HostOsPreset.MAC_RIGHT_OPTION),
+        )
+        assertEquals(HostOsPreset.MAC_RIGHT_OPTION, HostOsPreset.fromStorageValue("mac_right_option"))
+    }
+
+    @Test
     fun unknownAutoHostDoesNotSendAnyKey() {
         val preset = HostInputPolicy.resolvePreset(HostOsPreset.AUTO, "Living Room")
 
@@ -54,7 +63,8 @@ class HostInputPolicyTest {
     @Test
     fun manualPresetCyclesThroughAvailableHostModes() {
         assertEquals(HostOsPreset.MAC, HostOsPreset.AUTO.nextManualPreset())
-        assertEquals(HostOsPreset.WINDOWS_LANG1, HostOsPreset.MAC.nextManualPreset())
+        assertEquals(HostOsPreset.MAC_RIGHT_OPTION, HostOsPreset.MAC.nextManualPreset())
+        assertEquals(HostOsPreset.WINDOWS_LANG1, HostOsPreset.MAC_RIGHT_OPTION.nextManualPreset())
         assertEquals(HostOsPreset.WINDOWS_RIGHT_ALT, HostOsPreset.WINDOWS_LANG1.nextManualPreset())
         assertEquals(HostOsPreset.AUTO, HostOsPreset.WINDOWS_RIGHT_ALT.nextManualPreset())
     }

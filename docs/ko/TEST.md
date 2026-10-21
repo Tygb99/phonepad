@@ -82,7 +82,8 @@ Android Bluetooth HID 지원은 기기와 제조사에 따라 다르므로 테�
 - Bluetooth 켜짐: HID 세션이 등록되고 PC 후보 목록이 유지된다.
 - 연결 상태에서 백그라운드 이동: 활성 mouse button은 release되고 HID 세션은 유지된다.
 - Windows 11: 한영 전환은 기본값에서 LANG1을 보내고, 해당 preset 선택 시 Right Alt를 보낸다.
-- macOS: 한영 전환은 staged Control + Space chord를 보낸다.
+- macOS: 한영 전환은 staged Control + Space chord를 보내고, 해당 preset 선택 시 오른쪽 Option 단독(HID Right Alt와 같은 신호, Araso 입력기용)을 보낸다.
+- 한영 누른 횟수: 보낸 한영 전환마다 `language_toggle_counts`에 날짜·방식별로 1씩 쌓이고, 리포트 칸에 최근 7일이 보인다.
 - Manifest: `INTERNET` 권한이 계속 없어야 한다.
 
 ## 릴리스 게이트 체크리스트
