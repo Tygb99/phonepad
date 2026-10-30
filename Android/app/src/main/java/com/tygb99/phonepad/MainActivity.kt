@@ -83,6 +83,8 @@ class MainActivity : Activity() {
     private var gestureDistance = 0f
     private var gestureDownX = 0f
     private var gestureDownY = 0f
+    private var gestureMaxNetPx = 0f
+    private var gestureMoveCount = 0
     private var usingScrollGesture = false
     private var doubleTapDragEnabled = false
     private var doubleTapDragActive = false
@@ -1465,6 +1467,8 @@ class MainActivity : Activity() {
                 gestureDistance = 0f
                 gestureDownX = event.x
                 gestureDownY = event.y
+                gestureMaxNetPx = 0f
+                gestureMoveCount = 0
                 usingScrollGesture = false
                 doubleTapDragActive = shouldStartDoubleTapDrag(event)
                 if (doubleTapDragActive) {
@@ -1486,6 +1490,11 @@ class MainActivity : Activity() {
                 lastX = event.x
                 lastY = event.y
                 gestureDistance += abs(dx) + abs(dy)
+                gestureMoveCount++
+                gestureMaxNetPx = maxOf(
+                    gestureMaxNetPx,
+                    abs(event.x - gestureDownX) + abs(event.y - gestureDownY),
+                )
                 if (event.pointerCount >= 2 || usingScrollGesture) {
                     val wheel = (-dy / 11f).roundToInt().coerceIn(-12, 12)
                     if (wheel != 0) sendMouseReport(0, 0, currentButtons(), wheel, 0)
@@ -1499,6 +1508,7 @@ class MainActivity : Activity() {
             }
             MotionEvent.ACTION_UP -> {
                 view.parent?.requestDisallowInterceptTouchEvent(false)
+                logTapJudge(event, "up")
                 if (doubleTapDragActive) {
                     doubleTapDragActive = false
                     releaseAllMouseButtons("double_tap_drag_up")
@@ -1514,6 +1524,7 @@ class MainActivity : Activity() {
             }
             MotionEvent.ACTION_CANCEL -> {
                 view.parent?.requestDisallowInterceptTouchEvent(false)
+                logTapJudge(event, "cancel")
                 if (doubleTapDragActive) {
                     doubleTapDragActive = false
                     releaseAllMouseButtons("double_tap_drag_cancel")
@@ -1523,6 +1534,28 @@ class MainActivity : Activity() {
             }
         }
         return true
+    }
+
+    // Debug: one line per trackpad touch so a slow-press report can be read back with adb logcat -s PhonePad.
+    private fun logTapJudge(event: MotionEvent, kind: String) {
+        val density = resources.displayMetrics.density
+        val netPx = abs(event.x - gestureDownX) + abs(event.y - gestureDownY)
+        val result = when {
+            kind == "cancel" -> "cancel"
+            doubleTapDragActive -> "double_tap_drag_end"
+            dragMode -> "drag_mode"
+            usingScrollGesture -> "scroll"
+            isTapGesture(event) -> "tap_click"
+            else -> "move_no_click"
+        }
+        Log.d(
+            LOG_TAG,
+            "tap_judge result=$result ms=${event.eventTime - event.downTime} " +
+                "path_dp=${"%.1f".format(gestureDistance / density)} " +
+                "net_dp=${"%.1f".format(netPx / density)} " +
+                "max_net_dp=${"%.1f".format(maxOf(gestureMaxNetPx, netPx) / density)} " +
+                "moves=$gestureMoveCount pointers=${event.pointerCount}",
+        )
     }
 
     private fun isTapGesture(event: MotionEvent): Boolean {
