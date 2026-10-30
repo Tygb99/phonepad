@@ -6,16 +6,20 @@ import kotlin.test.assertTrue
 
 class TapPolicyTest {
     @Test
-    fun stillOrQuickTouchesStayTaps() {
+    fun shortStillTouchesAreTaps() {
         assertTrue(TapPolicy.isTap(pathDp = 0f, netDp = 0f, durationMs = 90))
-        assertTrue(TapPolicy.isTap(pathDp = 0f, netDp = 0f, durationMs = 900))
+        assertTrue(TapPolicy.isTap(pathDp = 3.3f, netDp = 3.3f, durationMs = 116))
+        assertTrue(TapPolicy.isTap(pathDp = 1f, netDp = 1f, durationMs = 239))
         assertTrue(TapPolicy.isTap(pathDp = 6f, netDp = 5f, durationMs = 100))
+        assertTrue(TapPolicy.isTap(pathDp = 0f, netDp = 0f, durationMs = TapPolicy.TAP_MAX_MS))
     }
 
     @Test
-    fun slowPressThatWobblesAroundOneSpotStillClicks() {
-        assertTrue(TapPolicy.isTap(pathDp = 7.5f, netDp = 1f, durationMs = 600))
-        assertTrue(TapPolicy.isTap(pathDp = 7.9f, netDp = 3.9f, durationMs = 400))
+    fun longPressIsMovementNotAClickEvenWhenStill() {
+        assertFalse(TapPolicy.isTap(pathDp = 0f, netDp = 0f, durationMs = TapPolicy.TAP_MAX_MS + 1))
+        assertFalse(TapPolicy.isTap(pathDp = 1.8f, netDp = 1.8f, durationMs = 1742))
+        assertFalse(TapPolicy.isTap(pathDp = 3.6f, netDp = 2.8f, durationMs = 1066))
+        assertFalse(TapPolicy.isTap(pathDp = 4f, netDp = 4f, durationMs = 441))
     }
 
     @Test
