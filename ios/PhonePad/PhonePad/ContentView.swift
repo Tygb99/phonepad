@@ -728,6 +728,7 @@ final class TouchPadUIView: UIView {
     private var mode = Mode.none
     private var lastCentroid: CGPoint?
     private var tapTravel: CGVector?
+    private var tapPathLength: CGFloat = 0
     private var touchStartCount = 0
     private var touchStartTime = CACurrentMediaTime()
     private var lastMoveTime = CACurrentMediaTime()
@@ -760,6 +761,7 @@ final class TouchPadUIView: UIView {
         mode = touchStartCount >= 2 ? .scroll : .pointer
         lastCentroid = centroid
         tapTravel = .zero
+        tapPathLength = 0
         touchStartTime = CACurrentMediaTime()
         lastMoveTime = touchStartTime
         scrollVelocity = 0
@@ -789,6 +791,7 @@ final class TouchPadUIView: UIView {
 
         tapTravel?.dx += dx
         tapTravel?.dy += dy
+        tapPathLength += hypot(dx, dy)
         self.lastCentroid = centroid
         lastMoveTime = now
     }
@@ -838,12 +841,20 @@ final class TouchPadUIView: UIView {
         return CGPoint(x: x, y: y)
     }
 
+    // Same rule as Android TapPolicy: the whole travelled path must stay inside the slop, and a
+    // touch that ends noticeably away from its start after a held moment was a cursor nudge.
+    private static let tapSlop: CGFloat = 12
+    private static let tapMaxDuration: CFTimeInterval = 0.28
+    private static let smallMoveNet: CGFloat = 4
+    private static let smallMoveMinDuration: CFTimeInterval = 0.15
+
     private func isTapCandidate() -> Bool {
         guard let tapTravel else { return false }
 
-        let distance = hypot(tapTravel.dx, tapTravel.dy)
+        let net = hypot(tapTravel.dx, tapTravel.dy)
         let duration = CACurrentMediaTime() - touchStartTime
-        return distance < 12 && duration < 0.28
+        let deliberateSmallMove = net >= Self.smallMoveNet && duration >= Self.smallMoveMinDuration
+        return tapPathLength < Self.tapSlop && duration < Self.tapMaxDuration && !deliberateSmallMove
     }
 
     private func handleTap() {
