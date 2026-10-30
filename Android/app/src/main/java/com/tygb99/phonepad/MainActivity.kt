@@ -80,6 +80,8 @@ class MainActivity : Activity() {
     private var lastX = 0f
     private var lastY = 0f
     private var gestureDistance = 0f
+    private var gestureDownX = 0f
+    private var gestureDownY = 0f
     private var usingScrollGesture = false
     private var doubleTapDragEnabled = false
     private var doubleTapDragActive = false
@@ -1460,6 +1462,8 @@ class MainActivity : Activity() {
                 lastX = event.x
                 lastY = event.y
                 gestureDistance = 0f
+                gestureDownX = event.x
+                gestureDownY = event.y
                 usingScrollGesture = false
                 doubleTapDragActive = shouldStartDoubleTapDrag(event)
                 if (doubleTapDragActive) {
@@ -1497,7 +1501,7 @@ class MainActivity : Activity() {
                 if (doubleTapDragActive) {
                     doubleTapDragActive = false
                     releaseAllMouseButtons("double_tap_drag_up")
-                } else if (!dragMode && !usingScrollGesture && gestureDistance < dp(8)) {
+                } else if (!dragMode && !usingScrollGesture && isTapGesture(event)) {
                     clickMouse(LEFT_BUTTON)
                     lastTapUpTime = event.eventTime
                     lastTapX = event.x
@@ -1518,6 +1522,16 @@ class MainActivity : Activity() {
             }
         }
         return true
+    }
+
+    private fun isTapGesture(event: MotionEvent): Boolean {
+        val density = resources.displayMetrics.density
+        val netPx = abs(event.x - gestureDownX) + abs(event.y - gestureDownY)
+        return TapPolicy.isTap(
+            pathDp = gestureDistance / density,
+            netDp = netPx / density,
+            durationMs = event.eventTime - event.downTime,
+        )
     }
 
     private fun readyHostForInput(showStatus: Boolean): BluetoothDevice? {
