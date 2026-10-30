@@ -227,6 +227,10 @@ final class BLEMouseController: NSObject, ObservableObject {
     }
 
     private func resetConnectionState(status: String) {
+        fallbackScanTask?.cancel()
+        fallbackScanTask = nil
+        centralManager.stopScan()
+        isScanning = false
         connectedPeripheral = nil
         mouseCharacteristic = nil
         currentButtons = 0

@@ -583,6 +583,7 @@ private struct SliderRow: View {
 
 private struct MouseButtonView: View {
     @EnvironmentObject private var mouseController: BLEMouseController
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isPressed = false
     @State private var isLocked = false
     @State private var didLockDuringCurrentPress = false
@@ -622,6 +623,13 @@ private struct MouseButtonView: View {
                         }
                     }
             )
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { unlock() }
+            }
+            .onChange(of: mouseController.isConnected) { _, connected in
+                if !connected { unlock() }
+            }
+            .onDisappear { unlock() }
     }
 
     private var buttonBackground: Color {
