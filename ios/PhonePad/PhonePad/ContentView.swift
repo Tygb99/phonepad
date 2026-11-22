@@ -1,6 +1,69 @@
 import SwiftUI
 import UIKit
 
+// Look follows the Android app (MainActivity.kt COLOR_* values): dark panels, flat rounded
+// buttons with text labels, touchpad on the left and a two-column control stack on the right.
+private enum PadTheme {
+    static let background = rgb(10, 12, 15)
+    static let panel = rgb(23, 27, 34)
+    static let info = rgb(35, 41, 50)
+    static let stroke = rgb(72, 83, 100)
+    static let trackpad = rgb(15, 19, 25)
+    static let trackpadStroke = rgb(94, 111, 134)
+    static let trackpadLabel = rgb(136, 149, 169)
+    static let trackpadReady = rgb(223, 232, 244)
+    static let muted = rgb(166, 177, 194)
+    static let accent = rgb(132, 189, 177)
+    static let button = rgb(46, 55, 68)
+    static let buttonPressed = rgb(62, 74, 91)
+    static let buttonStroke = rgb(96, 112, 134)
+    static let lockActive = rgb(169, 57, 68)
+    static let lockStroke = rgb(236, 118, 130)
+    static let inputActive = rgb(58, 106, 92)
+    static let inputStroke = rgb(132, 207, 178)
+    static let cornerRadius: CGFloat = 8
+    static let buttonFont = Font.system(size: 15, weight: .semibold)
+
+    private static func rgb(_ red: Double, _ green: Double, _ blue: Double) -> Color {
+        Color(red: red / 255, green: green / 255, blue: blue / 255)
+    }
+}
+
+private extension View {
+    func padSurface(_ fill: Color, stroke: Color) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: PadTheme.cornerRadius, style: .continuous).fill(fill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PadTheme.cornerRadius, style: .continuous)
+                .strokeBorder(stroke, lineWidth: 1)
+        )
+    }
+
+    func padButtonLabel() -> some View {
+        font(PadTheme.buttonFont)
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, minHeight: 36, maxHeight: .infinity)
+    }
+}
+
+private struct PadButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    var fill = PadTheme.button
+    var stroke = PadTheme.buttonStroke
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padButtonLabel()
+            .padSurface(configuration.isPressed ? PadTheme.buttonPressed : fill, stroke: stroke)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? 1 : 0.5)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var mouseController: BLEMouseController
     @State private var pointerSensitivity = 1.0
@@ -9,95 +72,147 @@ struct ContentView: View {
     @State private var isKeyboardPresented = false
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { proxy in
-                let isLandscape = proxy.size.width > proxy.size.height
+        GeometryReader { proxy in
+            let isLandscape = proxy.size.width > proxy.size.height
 
-                VStack(spacing: 14) {
-                    connectionPanel
-
-                    if isLandscape {
-                        HStack(spacing: 14) {
-                            touchSurface
-                            controlColumn
-                                .frame(width: min(360, proxy.size.width * 0.36))
-                        }
-                    } else {
-                        VStack(spacing: 16) {
-                            touchSurface
-                            controlColumn
-                        }
+            Group {
+                if isLandscape {
+                    HStack(spacing: 14) {
+                        touchpadColumn
+                        controlColumn
+                            .frame(width: min(300, proxy.size.width * 0.40))
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        touchpadColumn
+                        controlColumn
+                            .frame(height: min(300, proxy.size.height * 0.42))
                     }
                 }
-                .padding()
-                .frame(width: proxy.size.width, height: proxy.size.height)
-                .background(Color(.systemGroupedBackground))
             }
-            .navigationTitle("PhonePad")
-            .navigationBarTitleDisplayMode(.inline)
+            .padding(14)
+            .padSurface(PadTheme.panel, stroke: PadTheme.stroke)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .background(PadTheme.background.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $isKeyboardPresented) {
             KeyboardSheet()
                 .environmentObject(mouseController)
+                .preferredColorScheme(.dark)
+        }
+    }
+
+    private var touchpadColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("터치패드 모드")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text("한 손가락 이동 · 두 손가락 스크롤 · 탭 클릭")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(PadTheme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.top, 2)
+                .padding(.bottom, 10)
+
+            touchSurface
+
+            HStack(spacing: 6) {
+                SliderRow(title: "포인터", value: $pointerSensitivity, range: 0.25...3.0)
+                SliderRow(title: "스크롤", value: $scrollSensitivity, range: 0.25...3.0)
+            }
+            .padding(.top, 10)
         }
     }
 
     private var controlColumn: some View {
-        VStack(spacing: 14) {
-            buttonGrid
-            keyboardButton
-            settings
-            Spacer(minLength: 0)
-        }
-    }
+        VStack(spacing: 6) {
+            statusChip
+                .frame(maxHeight: .infinity)
 
-    private var connectionPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: mouseController.isConnected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
-                    .font(.title3)
-                    .foregroundStyle(mouseController.isConnected ? .green : .secondary)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(mouseController.isConnected ? "Connected" : "Auto connecting")
-                        .font(.headline)
-                    Text(mouseController.statusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-
+            Button(connectionButtonTitle) {
                 if mouseController.isConnected {
-                    Button("Disconnect") {
-                        mouseController.disconnect()
-                    }
-                    .buttonStyle(.bordered)
+                    mouseController.disconnect()
                 } else {
-                    Button(mouseController.isScanning ? "Scanning" : "Scan") {
-                        mouseController.resumeAutoConnect()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(mouseController.isScanning)
+                    mouseController.resumeAutoConnect()
                 }
             }
+            .buttonStyle(PadButtonStyle(
+                fill: mouseController.isConnected ? PadTheme.button : PadTheme.inputActive,
+                stroke: mouseController.isConnected ? PadTheme.buttonStroke : PadTheme.inputStroke
+            ))
+            .disabled(!mouseController.isConnected && mouseController.isScanning)
+            .frame(maxHeight: .infinity)
+
+            HStack(spacing: 6) {
+                Button("키보드") {
+                    isKeyboardPresented = true
+                }
+                .buttonStyle(PadButtonStyle())
+                MouseButtonView(title: "가운데 클릭", button: .middle)
+            }
+            .frame(maxHeight: .infinity)
+
+            HStack(spacing: 6) {
+                MouseButtonView(title: "왼쪽 클릭", button: .left)
+                MouseButtonView(title: "오른쪽 클릭", button: .right)
+            }
+            .frame(maxHeight: .infinity)
+
+            HStack(spacing: 6) {
+                ScrollHoldButton(
+                    title: "스크롤 ↑",
+                    initialAmount: 2,
+                    repeatAmount: 1,
+                    repeater: scrollRepeater
+                ) { amount in
+                    mouseController.wheel(amount)
+                }
+
+                ScrollHoldButton(
+                    title: "스크롤 ↓",
+                    initialAmount: -2,
+                    repeatAmount: -1,
+                    repeater: scrollRepeater
+                ) { amount in
+                    mouseController.wheel(amount)
+                }
+            }
+            .frame(maxHeight: .infinity)
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var keyboardButton: some View {
-        Button {
-            isKeyboardPresented = true
-        } label: {
-            Label("Keyboard", systemImage: "keyboard")
-                .frame(maxWidth: .infinity)
-                .frame(height: 46)
+    private var connectionButtonTitle: String {
+        if mouseController.isConnected {
+            return "연결 해제"
         }
-        .buttonStyle(.borderedProminent)
+        return mouseController.isScanning ? "찾는 중" : "연결!"
+    }
+
+    private var statusChip: some View {
+        let connected = mouseController.isConnected
+        return VStack(spacing: 2) {
+            Text(connected ? "연결됨" : "자동 연결 중")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+            Text(mouseController.statusText)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(connected ? PadTheme.trackpadReady : PadTheme.muted)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 36, maxHeight: .infinity)
+        .padSurface(
+            connected ? PadTheme.inputActive : PadTheme.info,
+            stroke: connected ? PadTheme.inputStroke : PadTheme.stroke
+        )
     }
 
     private var touchSurface: some View {
@@ -123,74 +238,23 @@ struct ContentView: View {
             }
         )
         .overlay {
-            ZStack {
-                GridBackground()
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                    .padding(18)
-
-                Image(systemName: "hand.point.up.left")
-                    .font(.system(size: 38, weight: .regular))
-                    .foregroundStyle(.secondary.opacity(0.38))
-            }
-            .allowsHitTesting(false)
+            Text(mouseController.isConnected
+                 ? "터치패드 활성 · 한 손가락 이동 / 두 손가락 스크롤 / 탭 클릭"
+                 : "호스트 연결 대기 중")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(mouseController.isConnected ? PadTheme.trackpadReady : PadTheme.trackpadLabel)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 18)
+                .allowsHitTesting(false)
         }
-        .background(Color.teal.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(PadTheme.trackpad)
+        .clipShape(RoundedRectangle(cornerRadius: PadTheme.cornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
+            RoundedRectangle(cornerRadius: PadTheme.cornerRadius, style: .continuous)
+                .strokeBorder(PadTheme.trackpadStroke, lineWidth: 1)
         }
-        .frame(minHeight: 180)
+        .frame(minHeight: 140)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var buttonGrid: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                MouseButtonView(title: "Left", systemImage: "cursorarrow.click", button: .left)
-                MouseButtonView(title: "Middle", systemImage: "circle", button: .middle)
-                MouseButtonView(title: "Right", systemImage: "contextualmenu.and.cursorarrow", button: .right)
-            }
-
-            HStack(spacing: 10) {
-                Text("Scroll")
-                    .font(.callout.weight(.medium))
-                    .frame(width: 52, alignment: .leading)
-
-                ScrollHoldButton(
-                    title: "Up",
-                    systemImage: "arrow.up",
-                    initialAmount: 2,
-                    repeatAmount: 1,
-                    repeater: scrollRepeater
-                ) { amount in
-                    mouseController.wheel(amount)
-                }
-
-                ScrollHoldButton(
-                    title: "Down",
-                    systemImage: "arrow.down",
-                    initialAmount: -2,
-                    repeatAmount: -1,
-                    repeater: scrollRepeater
-                ) { amount in
-                    mouseController.wheel(amount)
-                }
-            }
-        }
-    }
-
-    private var settings: some View {
-        VStack(spacing: 12) {
-            SpeedSliderRow(title: "Pointer Speed", value: $pointerSensitivity, range: 0.25...3.0)
-            SliderRow(title: "Scroll", value: $scrollSensitivity, range: 0.25...3.0)
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -259,13 +323,13 @@ private struct KeyboardSheet: View {
                     .opacity(0.01)
                     .accessibilityHidden(true)
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(PadTheme.background.ignoresSafeArea())
             }
-            .navigationTitle("Keyboard")
+            .navigationTitle("키보드")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button("닫기") {
                         isTextKeyboardActive = false
                         dismiss()
                     }
@@ -275,26 +339,23 @@ private struct KeyboardSheet: View {
     }
 
     private var iosKeyboardControls: some View {
-        HStack(spacing: 10) {
-            Button {
+        HStack(spacing: 6) {
+            Button("iOS 키보드") {
                 isTextKeyboardActive = true
-            } label: {
-                Label("iOS Keyboard", systemImage: "keyboard")
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PadButtonStyle(fill: PadTheme.inputActive, stroke: PadTheme.inputStroke))
 
             if isTextKeyboardActive {
                 Button {
                     isTextKeyboardActive = false
                 } label: {
                     Image(systemName: "keyboard.chevron.compact.down")
-                        .frame(width: 46, height: 44)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(PadButtonStyle())
+                .frame(width: 56)
             }
         }
+        .frame(height: 44)
     }
 
     private var languageTogglePanel: some View {
@@ -306,18 +367,14 @@ private struct KeyboardSheet: View {
             }
             .pickerStyle(.segmented)
 
-            Button {
+            Button("한영") {
                 mouseController.languageToggle(for: hostProfile)
-            } label: {
-                Label("한영", systemImage: "globe")
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(PadButtonStyle())
+            .frame(height: 44)
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(14)
+        .padSurface(PadTheme.panel, stroke: PadTheme.stroke)
     }
 
     private func sendTextInput(_ text: String) {
@@ -337,17 +394,13 @@ private struct KeyboardSheet: View {
     }
 
     private func keyGrid(_ keys: [KeyboardButtonSpec], columns: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), spacing: 8) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: columns), spacing: 6) {
             ForEach(keys) { key in
-                Button {
+                Button(key.title) {
                     mouseController.tapKeyboardKey(key.keyCode)
-                } label: {
-                    Text(key.title)
-                        .font(.body.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(PadButtonStyle())
+                .frame(height: 44)
             }
         }
     }
@@ -485,20 +538,15 @@ private struct ScrollHoldButton: View {
     @State private var isPressed = false
 
     let title: String
-    let systemImage: String
     let initialAmount: Int8
     let repeatAmount: Int8
     let repeater: ContinuousScrollRepeater
     let onScroll: (Int8) -> Void
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.callout.weight(.medium))
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(Color.accentColor)
-            .background(isPressed ? Color.accentColor.opacity(0.18) : Color(.tertiarySystemFill))
-            .clipShape(Capsule())
+        Text(title)
+            .padButtonLabel()
+            .padSurface(isPressed ? PadTheme.buttonPressed : PadTheme.button, stroke: PadTheme.buttonStroke)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -515,10 +563,8 @@ private struct ScrollHoldButton: View {
                         stopScrolling()
                     }
             )
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scroll \(title)")
+        .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             onScroll(initialAmount)
@@ -539,45 +585,25 @@ private struct ScrollHoldButton: View {
     }
 }
 
-private struct SpeedSliderRow: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.callout.weight(.medium))
-
-            Slider(value: $value, in: range, step: 0.05)
-
-            HStack {
-                Text("Slow")
-                Spacer()
-                Text("Fast")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-    }
-}
-
-
 private struct SliderRow: View {
     let title: String
     @Binding var value: Double
     let range: ClosedRange<Double>
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text(title)
-                .frame(width: 58, alignment: .leading)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(PadTheme.muted)
+                .lineLimit(1)
+                .fixedSize()
             Slider(value: $value, in: range, step: 0.05)
-            Text(value, format: .number.precision(.fractionLength(2)))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 42, alignment: .trailing)
+                .tint(PadTheme.accent)
         }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: 40)
+        .padSurface(PadTheme.info, stroke: PadTheme.stroke)
     }
 }
 
@@ -590,20 +616,17 @@ private struct MouseButtonView: View {
     @State private var lockTask: DispatchWorkItem?
 
     let title: String
-    let systemImage: String
     let button: MouseButton
 
     var body: some View {
-        Label(title, systemImage: isLocked ? "lock.fill" : systemImage)
-            .font(.body.weight(.medium))
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(buttonBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isLocked ? Color.accentColor : Color.secondary.opacity(0.45), lineWidth: 1)
+        HStack(spacing: 4) {
+            if isLocked {
+                Image(systemName: "lock.fill")
             }
+            Text(title)
+        }
+            .padButtonLabel()
+            .padSurface(buttonBackground, stroke: isLocked ? PadTheme.lockStroke : PadTheme.buttonStroke)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -634,14 +657,14 @@ private struct MouseButtonView: View {
 
     private var buttonBackground: Color {
         if isLocked {
-            return Color.accentColor.opacity(0.30)
+            return PadTheme.lockActive
         }
 
         if isPressed {
-            return Color.accentColor.opacity(0.22)
+            return PadTheme.buttonPressed
         }
 
-        return Color(.secondarySystemGroupedBackground)
+        return PadTheme.button
     }
 
     private func pressMomentarily() {
@@ -912,24 +935,5 @@ final class TouchPadUIView: UIView {
     private func clampInt8(_ value: Double) -> Int8 {
         let rounded = Int(value.rounded())
         return Int8(max(-127, min(127, rounded)))
-    }
-}
-
-private struct GridBackground: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let step: CGFloat = 36
-
-        stride(from: rect.minX, through: rect.maxX, by: step).forEach { x in
-            path.move(to: CGPoint(x: x, y: rect.minY))
-            path.addLine(to: CGPoint(x: x, y: rect.maxY))
-        }
-
-        stride(from: rect.minY, through: rect.maxY, by: step).forEach { y in
-            path.move(to: CGPoint(x: rect.minX, y: y))
-            path.addLine(to: CGPoint(x: rect.maxX, y: y))
-        }
-
-        return path
     }
 }
